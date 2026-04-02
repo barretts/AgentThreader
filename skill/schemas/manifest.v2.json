@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifest.v2.json",
+  "title": "AgentThreader Manifest v2",
+  "description": "Declares the set of tasks, their dependencies, timeouts, and verification profiles for a runner invocation.",
+  "type": "object",
+  "required": ["manifest_version", "run_id", "tasks"],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "const": "2.0",
+      "description": "Contract version. MUST be \"2.0\"."
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical run identifier."
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/task" },
+      "description": "Ordered list of task definitions."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "task": {
+      "type": "object",
+      "required": ["id", "prompt_ref", "depends_on", "timeout_sec", "verify_profile"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable, unique task identifier."
+        },
+        "prompt_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path or logical reference to the task prompt."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Upstream task IDs that must be DONE before execution."
+        },
+        "timeout_sec": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Task timeout in seconds."
+        },
+        "verify_profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the project-defined verification profile."
+        },
+        "context_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Shared context references applied to the task."
+        },
+        "priority": {
+          "type": "number",
+          "description": "Lower number means earlier scheduling within the same dependency depth."
+        },
+        "retry_policy": { "$ref": "#/$defs/retry_policy" },
+        "metadata": {
+          "type": "object",
+          "description": "Arbitrary task metadata for reporting or filtering."
+        }
+      },
+      "additionalProperties": false
+    },
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "max_attempts": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Maximum worker attempts for this task. Defaults to global policy if omitted."
+        },
+        "retry_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Failure classes eligible for retry."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task_result.v2.json",
+  "title": "Task Result v2",
+  "description": "Worker output contract. Emitted inside <<<TASK_RESULT_V2>>> fences.",
+  "type": "object",
+  "required": ["contract_version", "task_id", "status", "summary"],
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "2.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Task ID matching the current manifest task."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["DONE", "BLOCKED", "FAILED", "CONTRACT_ERROR"],
+      "description": "Worker-declared outcome."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short human-readable summary of what happened."
+    },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Relative file paths changed by the proposed work."
+    },
+    "writes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/write_entry" },
+      "description": "Proposed file write operations applied by the orchestrator."
+    },
+    "evidence": { "$ref": "#/$defs/evidence" },
+    "failure_class": {
+      "type": "string",
+      "description": "Optional worker-supplied hint. The orchestrator still owns final classification."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "write_entry": {
+      "type": "object",
+      "required": ["path", "op", "encoding"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative normalized path. MUST NOT escape the workspace root."
+        },
+        "op": {
+          "type": "string",
+          "enum": ["create", "replace", "append"]
+        },
+        "encoding": {
+          "type": "string",
+          "const": "utf8"
+        },
+        "content": {
+          "type": "string",
+          "description": "Inline file content to be applied by the orchestrator."
+        },
+        "content_ref": {
+          "type": "string",
+          "description": "Path to staged content written by the worker tooling instead of inline content."
+        },
+        "sha256_before": {
+          "type": "string",
+          "description": "Optional precondition hash for conflict detection."
+        }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["content"] },
+        { "required": ["content_ref"] }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Commands the worker claims to have run."
+        },
+        "log_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Relative log references produced by the worker."
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional structured evidence notes."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

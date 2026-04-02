@@ -1,0 +1,48 @@
+{
+  "name": "agent-threader",
+  "version": "2.0.0",
+  "description": "AgentThreader -- skill + companion CLI for manifest-driven agentic CLI orchestration with structured contracts, resumable state, and bounded self-healing",
+  "type": "module",
+  "bin": {
+    "agent-threader": "./dist/cli/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "skill",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "setup": "bash install.sh",
+    "setup:all": "bash install.sh --all",
+    "install-skills": "bash install.sh --skills-only",
+    "uninstall-skills": "bash install.sh --uninstall",
+    "compile": "node skill/build/compile.mjs",
+    "compile:validate": "node skill/build/compile.mjs --validate",
+    "compile:watch": "node skill/build/compile.mjs --watch"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

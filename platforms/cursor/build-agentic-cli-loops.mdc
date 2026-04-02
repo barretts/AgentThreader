@@ -1,0 +1,41 @@
+---
+description: Route batch agent-runner, prompt-loop, self-healing orchestration, Cursor `agent`, and OpenCode `opencode` automation requests to the agent-threader skill. Apply when building or debugging resumable agentic CLI workflows.
+alwaysApply: false
+---
+
+# AgentThreader Rule
+
+Use the `agent-threader` skill for requests involving:
+
+- batch prompt runners
+- looping over tasks, manifests, components, stories, or tickets with an agent CLI
+- Cursor `agent` automation
+- OpenCode `opencode` automation
+- resumable or checkpointed agent loops
+- outer-loop prompt repair or self-healing retries
+- log triage followed by targeted recheck runs
+
+## Routing Guidance
+
+When the request matches this pattern:
+
+1. Read `agent-threader/SKILL.md` for when to use and workflow steps.
+2. Read `agent-threader/SPEC.md` for the normative v2 architecture.
+3. Use the JSON schemas in `agent-threader/schemas/` for exact contract definitions.
+4. Use `agent-threader/templates/` as the starting point for implementation.
+5. Keep this rule thin. Do not duplicate the skill or spec contents here.
+
+## Self-Healing Requirement
+
+If the user wants a healing or repair loop around the worker loop:
+
+- ask which worker CLI and worker model to use
+- ask which healer CLI and healer model to use
+- if the user does not care, make the default assumption explicit before proceeding
+
+## Boundaries
+
+- Put reusable process guidance in the skill.
+- Put executable runner code in the repo under `scripts/`.
+- Use rules only for routing or workspace-specific constraints.
+- The spec (`SPEC.md`) is the single source of truth. Do not redefine architecture in this rule.
