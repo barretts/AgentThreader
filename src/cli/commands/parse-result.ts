@@ -1,4 +1,4 @@
-import { parseResult, type ParseResultOptions, type ParseResultResult } from '../../core/parse-result.js';
+import { parseResult, type ParseResultOptions, type ParseResultResult } from '../../lib/parser/parse-result.js';
 
 export interface ParseResultCommandOptions extends ParseResultOptions {
   json: boolean;

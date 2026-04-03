@@ -34,7 +34,7 @@ CODEX_SKILLS_DIR="$CODEX_HOME_DIR/skills"
 
 cleanup_managed() {
   local dir="$1"
-  [[ -d "$dir" ]] || return
+  [[ -d "$dir" ]] || return 0
   grep -rl "$MANAGED_MARKER" "$dir" 2>/dev/null | while read -r f; do
     rm -f "$f"
     local parent; parent="$(dirname "$f")"

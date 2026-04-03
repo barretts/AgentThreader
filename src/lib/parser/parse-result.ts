@@ -1,4 +1,4 @@
-import type { TaskResultV2, ParserFailure } from "./types.js";
+import type { TaskResultV2, ParserFailure } from "../contracts/types.js";
 import { parseTaskResult, isParserFailure } from "./parser.js";
 
 export interface ParseResultOptions {

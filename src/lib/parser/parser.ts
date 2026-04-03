@@ -4,7 +4,8 @@ import type {
   HealDecisionV2,
   ParserFailure,
   ParserErrorCode,
-} from "./types.js";
+} from "../contracts/types.js";
+import { validateTaskResultSchema, validateHealDecisionSchema } from "../contracts/schema-validator.js";
 
 const TASK_RESULT_START = "<<<TASK_RESULT_V2>>>";
 const TASK_RESULT_END = "<<<END_TASK_RESULT_V2>>>";
@@ -150,8 +151,6 @@ function removeComments(text: string): string {
   return result;
 }
 
-const VALID_TASK_STATUSES = new Set(["DONE", "BLOCKED", "FAILED", "CONTRACT_ERROR"]);
-
 function validateTaskResult(data: unknown): TaskResultV2 | ParserFailure {
   if (typeof data !== "object" || data === null) {
     return fail("SCHEMA_VIOLATION", "Task result must be a JSON object");
@@ -163,32 +162,15 @@ function validateTaskResult(data: unknown): TaskResultV2 | ParserFailure {
     return fail("UNSUPPORTED_VERSION", `Expected contract_version "2.0", got "${String(obj.contract_version)}"`);
   }
 
-  for (const field of ["task_id", "status", "summary"] as const) {
-    if (typeof obj[field] !== "string" || (obj[field] as string).length === 0) {
-      return fail("MISSING_REQUIRED_FIELD", `Missing or empty required field: ${field}`);
-    }
+  const schemaResult = validateTaskResultSchema(data);
+  if (!schemaResult.valid) {
+    const first = schemaResult.errors[0];
+    const code: ParserErrorCode = first?.keyword === "required" ? "MISSING_REQUIRED_FIELD" : "SCHEMA_VIOLATION";
+    return fail(code, schemaResult.errors.map(e => `${e.path}: ${e.message}`).join("; "));
   }
 
-  if (!VALID_TASK_STATUSES.has(obj.status as string)) {
-    return fail("SCHEMA_VIOLATION", `Invalid status "${String(obj.status)}". Must be one of: ${[...VALID_TASK_STATUSES].join(", ")}`);
-  }
-
-  if (obj.writes !== undefined) {
-    if (!Array.isArray(obj.writes)) {
-      return fail("SCHEMA_VIOLATION", "writes must be an array");
-    }
-    for (const w of obj.writes as Array<Record<string, unknown>>) {
-      if (!w.content && !w.content_ref) {
-        return fail("SCHEMA_VIOLATION", `Write entry for "${String(w.path)}" must have content or content_ref`);
-      }
-    }
-  }
-
-  return obj as unknown as TaskResultV2;
+  return data as TaskResultV2;
 }
-
-const VALID_HEAL_DECISIONS = new Set(["RETRY", "ESCALATE", "NOT_FIXABLE"]);
-const VALID_HEAL_SCOPES = new Set(["task", "batch", "epoch"]);
 
 function validateHealDecision(data: unknown): HealDecisionV2 | ParserFailure {
   if (typeof data !== "object" || data === null) {
@@ -201,25 +183,14 @@ function validateHealDecision(data: unknown): HealDecisionV2 | ParserFailure {
     return fail("UNSUPPORTED_VERSION", `Expected contract_version "2.0", got "${String(obj.contract_version)}"`);
   }
 
-  for (const field of ["scope", "decision", "failure_class", "root_cause"] as const) {
-    if (typeof obj[field] !== "string" || (obj[field] as string).length === 0) {
-      return fail("MISSING_REQUIRED_FIELD", `Missing or empty required field: ${field}`);
-    }
+  const schemaResult = validateHealDecisionSchema(data);
+  if (!schemaResult.valid) {
+    const first = schemaResult.errors[0];
+    const code: ParserErrorCode = first?.keyword === "required" ? "MISSING_REQUIRED_FIELD" : "SCHEMA_VIOLATION";
+    return fail(code, schemaResult.errors.map(e => `${e.path}: ${e.message}`).join("; "));
   }
 
-  if (!VALID_HEAL_SCOPES.has(obj.scope as string)) {
-    return fail("SCHEMA_VIOLATION", `Invalid scope "${String(obj.scope)}". Must be one of: ${[...VALID_HEAL_SCOPES].join(", ")}`);
-  }
-
-  if (!VALID_HEAL_DECISIONS.has(obj.decision as string)) {
-    return fail("SCHEMA_VIOLATION", `Invalid decision "${String(obj.decision)}". Must be one of: ${[...VALID_HEAL_DECISIONS].join(", ")}`);
-  }
-
-  if (!Array.isArray(obj.patches)) {
-    return fail("MISSING_REQUIRED_FIELD", "Missing required field: patches");
-  }
-
-  return obj as unknown as HealDecisionV2;
+  return data as HealDecisionV2;
 }
 
 export function generateFailureSignature(

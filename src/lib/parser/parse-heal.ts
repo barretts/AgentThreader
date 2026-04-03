@@ -1,4 +1,4 @@
-import type { HealDecisionV2, ParserFailure } from "./types.js";
+import type { HealDecisionV2, ParserFailure } from "../contracts/types.js";
 import { parseHealDecision, isParserFailure } from "./parser.js";
 
 export interface ParseHealOptions {

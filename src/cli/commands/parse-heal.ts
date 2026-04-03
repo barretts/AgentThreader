@@ -1,4 +1,4 @@
-import { parseHeal, type ParseHealOptions, type ParseHealResult } from '../../core/parse-heal.js';
+import { parseHeal, type ParseHealOptions, type ParseHealResult } from '../../lib/parser/parse-heal.js';
 
 export interface ParseHealCommandOptions extends ParseHealOptions {
   json: boolean;

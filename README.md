@@ -6,25 +6,38 @@ Portable skill and companion CLI for manifest-driven agentic CLI orchestration w
 
 ```
 agent-threader/
+  src/
+    lib/                    # Reusable library (no CLI concerns)
+      contracts/            # Contract types, schema validators, manifest validation
+      parser/               # Sentinel extraction, JSON repair, contract parsing
+      state/                # State load/write/init, status queries, log queries
+      orchestrator/         # Scheduling, batch strategy, healing policy, write safety
+      adapters/             # Adapter interfaces and shared utilities
+      errors/               # Typed error hierarchy
+      index.ts              # Library barrel export
+    cli/                    # Thin CLI wrappers (presentation only)
+      commands/             # One file per CLI command
+      index.ts              # Commander.js entry point
+      output-formatter.ts   # JSON, table, key-value formatters
+    index.ts                # Package entry re-exporting lib + OutputFormatter
   skill/
-    SKILL.md              # Original monolithic skill (preserved)
-    SPEC.md               # Normative v2 architecture specification
-    schemas/              # JSON schemas for all contracts
-    templates/            # TypeScript scaffolding (types, parser, orchestrator)
+    SKILL.md                # Skill entrypoint
+    SPEC.md                 # Normative v2 architecture specification
+    schemas/                # JSON schemas for all contracts
+    templates/              # TypeScript scaffolding (types, parser, orchestrator)
     build/
-      manifest.json       # Skill registry and fragment declarations
-      compile.mjs         # Fragment-resolving compiler (7 IDE targets)
+      manifest.json         # Skill registry and fragment declarations
+      compile.mjs           # Fragment-resolving compiler (7 IDE targets)
     fragments/
-      common/             # Shared rules (workflow, model selection, portability)
-      domain/             # Deep domain knowledge (architecture, healing, contracts)
-      meta/               # Skill system metadata (schemas ref, templates ref)
+      common/               # Shared rules (workflow, model selection, portability)
+      domain/               # Deep domain knowledge (architecture, healing, contracts)
+      meta/                 # Skill system metadata (schemas ref, templates ref)
     skills/
       agent-threader/
         agent-threader.md   # Composed skill source with {{include:...}}
-  src/                    # Companion CLI (TypeScript)
-  compiled/               # Machine-generated IDE-specific outputs
-  platforms/              # Thin translation layers for Codex, Cursor, Claude, Windsurf
-  install.sh              # One-command setup for all supported tools
+  compiled/                 # Machine-generated IDE-specific outputs
+  platforms/                # Thin translation layers for Codex, Cursor, Claude, Windsurf
+  install.sh                # One-command setup for all supported tools
 ```
 
 ## Core Design
