@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "heal_decision.v2.json",
+  "title": "Heal Decision v2",
+  "description": "Healer output contract. Emitted inside <<<HEAL_DECISION_V2>>> fences.",
+  "type": "object",
+  "required": ["contract_version", "scope", "decision", "failure_class", "root_cause", "patches"],
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "2.0"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["task", "batch", "epoch"],
+      "description": "Advisory healer view of the current healing level."
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["RETRY", "ESCALATE", "NOT_FIXABLE"]
+    },
+    "failure_class": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Normalized failure class the healer is addressing."
+    },
+    "root_cause": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-sentence diagnosis of the repeated issue."
+    },
+    "patches": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/patch" },
+      "description": "Allowed patch operations."
+    },
+    "learned_rule": {
+      "type": "string",
+      "description": "Reusable rule recorded by the orchestrator for future runs."
+    },
+    "escalations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["task_id", "reason"],
+        "properties": {
+          "task_id": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "description": "Explicit per-task escalation records."
+    },
+    "retry_policy": { "$ref": "#/$defs/retry_policy" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "patch": {
+      "type": "object",
+      "required": ["target", "operation"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["shared_context", "task_prompt", "runtime_patch", "contract_hint"]
+        },
+        "operation": {
+          "type": "string",
+          "enum": ["replace", "append", "merge"]
+        },
+        "path": {
+          "type": "string",
+          "description": "Required for shared_context and task_prompt file replacements."
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Required when target is task_prompt."
+        },
+        "content": {
+          "description": "Patch payload. String for text replacements, object for runtime merge content."
+        }
+      },
+      "additionalProperties": false
+    },
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "reset_tasks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tasks to reset to pending for retry."
+        },
+        "retry_window": {
+          "type": "string",
+          "enum": ["same_window", "shrink_window", "next_epoch"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

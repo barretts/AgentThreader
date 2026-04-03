@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "verify_profile.v2.json",
+  "title": "AgentThreader v2 Verification Profile Registry",
+  "description": "Operator-defined verification profiles resolved by the orchestrator.",
+  "type": "object",
+  "required": ["profiles"],
+  "additionalProperties": false,
+  "properties": {
+    "profiles": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/profile" },
+      "description": "Profile definitions keyed by profile name."
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "required": ["steps"],
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" },
+          "minItems": 1
+        },
+        "rollback_on_failure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to rollback applied writes when any verification step fails."
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": ["name", "cmd"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable step name for logging."
+        },
+        "cmd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Shell command to execute."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the command. Defaults to workspace root."
+        },
+        "timeout_sec": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Step timeout in seconds."
+        }
+      }
+    }
+  }
+}
