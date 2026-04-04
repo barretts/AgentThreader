@@ -1,4 +1,4 @@
-import { initState, type InitStateOptions, type InitStateResult } from '../../core/init-state.js';
+import { initState, type InitStateOptions, type InitStateResult } from '../../lib/state/init-state.js';
 
 export interface InitStateCommandOptions extends InitStateOptions {
   json: boolean;
