@@ -11,7 +11,7 @@
 # Node / TypeScript
 node_modules/
 dist/
-build/
+/build/
 coverage/
 *.tsbuildinfo
 
@@ -25,7 +25,7 @@ logs/
 tmp/
 out/
 artifacts/
-state/
+/state/
 
 # Skill system
 compiled/
