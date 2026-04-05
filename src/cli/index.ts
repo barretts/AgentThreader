@@ -9,6 +9,8 @@ import { parseResultCommand } from './commands/parse-result.js';
 import { parseHealCommand } from './commands/parse-heal.js';
 import { statusCommand } from './commands/status.js';
 import { logsCommand } from './commands/logs.js';
+import { doctorCommand } from './commands/doctor.js';
+import { explainErrorCommand } from './commands/explain-error.js';
 
 const program = new Command();
 
@@ -21,6 +23,7 @@ program
 
 program
   .command('validate-manifest')
+  .alias('validate')
   .description('Validate a manifest.v2 JSON file')
   .argument('<path>', 'Path to manifest JSON file')
   .option('--json', 'Output as JSON', false)
@@ -53,6 +56,7 @@ program
 
 program
   .command('init-state')
+  .alias('init')
   .description('Initialize a state.v2 file from a manifest')
   .argument('<manifest-path>', 'Path to manifest JSON file')
   .option('--output <path>', 'Output state file path', '.agentic/state.json')
@@ -87,6 +91,7 @@ program
 
 program
   .command('parse-result')
+  .alias('parse')
   .description('Extract and validate task_result.v2 from a worker log')
   .argument('<log-path>', 'Path to worker log file')
   .option('--json', 'Output as JSON', false)
@@ -116,6 +121,7 @@ program
 
 program
   .command('parse-heal')
+  .alias('heal')
   .description('Extract and validate heal_decision.v2 from a healer log')
   .argument('<log-path>', 'Path to healer log file')
   .option('--json', 'Output as JSON', false)
@@ -148,6 +154,7 @@ program
 
 program
   .command('status')
+  .alias('st')
   .description('Display run status from a state.v2 file')
   .argument('[state-path]', 'Path to state JSON file', '.agentic/state.json')
   .option('--json', 'Output as JSON', false)
@@ -206,6 +213,7 @@ program
 
 program
   .command('logs')
+  .alias('history')
   .description('List log files from state history entries')
   .argument('[state-path]', 'Path to state JSON file', '.agentic/state.json')
   .option('--task <id>', 'Filter by task ID')
@@ -241,6 +249,104 @@ program
             }
           }
         }
+      }
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+// ── doctor ───────────────────────────────────────────────────────────────────
+
+program
+  .command('doctor')
+  .alias('diag')
+  .description('Check environment and local setup health')
+  .option('--cwd <path>', 'Directory to inspect for local repo checks', process.cwd())
+  .option('--json', 'Output as JSON', false)
+  .action((options: { cwd: string; json: boolean }) => {
+    try {
+      const result = doctorCommand({
+        cwd: options.cwd,
+        json: options.json,
+      });
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(chalk.bold('AgentThreader Doctor'));
+        console.log();
+
+        for (const check of result.checks) {
+          const icon = check.status === 'pass' ? chalk.green('PASS')
+            : check.status === 'warn' ? chalk.yellow('WARN')
+            : chalk.red('FAIL');
+          console.log(`${icon} ${chalk.bold(check.title)} - ${check.detail}`);
+          if (check.recommendation) {
+            console.log(chalk.dim(`     fix: ${check.recommendation}`));
+          }
+        }
+
+        console.log();
+        if (result.ok) {
+          console.log(chalk.green('Doctor passed with no fatal issues.'));
+        } else {
+          console.log(chalk.red('Doctor found fatal issues. Fix FAIL checks and retry.'));
+          process.exit(1);
+        }
+      }
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+// ── explain ──────────────────────────────────────────────────────────────────
+
+program
+  .command('explain')
+  .alias('why')
+  .description('Explain an AgentThreader error code')
+  .argument('[code]', 'Error code to explain (e.g. CONFIG_ERROR, NO_SENTINEL)')
+  .option('--json', 'Output as JSON', false)
+  .action((code: string | undefined, options: { json: boolean }) => {
+    try {
+      const result = explainErrorCommand({
+        code,
+        json: options.json,
+      });
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        if (code && !result.found) process.exit(1);
+        return;
+      }
+
+      if (!code) {
+        console.log(chalk.bold('Known error codes:'));
+        for (const knownCode of result.knownCodes) {
+          console.log(`  - ${knownCode}`);
+        }
+        console.log();
+        console.log(chalk.dim('Usage: agent-threader explain <code>'));
+        return;
+      }
+
+      if (!result.found || !result.explanation) {
+        console.log(chalk.red(`Unknown error code: ${code}`));
+        console.log(chalk.dim('Run `agent-threader explain` to list supported codes.'));
+        process.exit(1);
+      }
+
+      const exp = result.explanation;
+      console.log(chalk.green(`${exp.code} (${exp.category})`));
+      console.log(chalk.dim(exp.meaning));
+      console.log();
+      console.log(chalk.bold('Likely causes:'));
+      for (const cause of exp.likelyCauses) {
+        console.log(`  - ${cause}`);
+      }
+      console.log(chalk.bold('Suggested fixes:'));
+      for (const fix of exp.suggestedFixes) {
+        console.log(`  - ${fix}`);
       }
     } catch (error) {
       handleError(error);
