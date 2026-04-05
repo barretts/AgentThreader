@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentThreader</title>
+  <meta name="description" content="Manifest-driven agentic CLI orchestration with structured contracts, resumable state, and bounded self-healing." />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="container">
+        <h1 class="logo">Agent<span class="accent">Threader</span></h1>
+        <p class="tagline">Manifest-driven agentic CLI orchestration</p>
+        <p class="subtitle">Structured contracts. Resumable state. Bounded self-healing.</p>
+        <div class="cta-row">
+          <a href="https://github.com/barretts/AgentThreader" class="btn btn-primary">View on GitHub</a>
+          <a href="#install" class="btn btn-secondary">Install</a>
+        </div>
+      </div>
+    </header>
+
+    <section id="features" class="features">
+      <div class="container">
+        <h2>How It Works</h2>
+        <div class="grid">
+          <div class="card">
+            <div class="card-icon">1</div>
+            <h3>Declare Work</h3>
+            <p>Define tasks, dependencies, timeouts, and verification profiles in a <code>manifest.v2</code> JSON file.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">2</div>
+            <h3>Thread Agents</h3>
+            <p>The orchestrator schedules tasks through CLI adapters with dependency-aware ordering and resumable execution state.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">3</div>
+            <h3>Verify &amp; Checkpoint</h3>
+            <p>Every result is parsed, schema-validated, and verified before state is committed. Atomic writes keep resume safe.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">4</div>
+            <h3>Self-Heal</h3>
+            <p>Bounded healing logic diagnoses failures, patches prompts, and retries without letting the run spiral.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="contracts">
+      <div class="container">
+        <h2>v2 Contract Stack</h2>
+        <div class="contract-grid">
+          <div class="contract-item">
+            <code>manifest.v2</code>
+            <span>Task declarations</span>
+          </div>
+          <div class="contract-item">
+            <code>task_result.v2</code>
+            <span>Worker output</span>
+          </div>
+          <div class="contract-item">
+            <code>heal_decision.v2</code>
+            <span>Healer output</span>
+          </div>
+          <div class="contract-item">
+            <code>state.v2</code>
+            <span>Run state</span>
+          </div>
+          <div class="contract-item">
+            <code>verify_profile.v2</code>
+            <span>Verification steps</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cli-section">
+      <div class="container">
+        <h2>Companion CLI</h2>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <pre><code><span class="prompt">$</span> agent-threader validate-manifest manifest.json
+<span class="success">Valid manifest: 12 tasks</span>
+<span class="dim">Dependency order: WP-001 -&gt; WP-003 -&gt; WP-002 -&gt; ...</span>
+
+<span class="prompt">$</span> agent-threader init-state manifest.json
+<span class="success">State initialized: .agentic/state.json</span>
+<span class="dim">  Run ID:  run-2026-04-02</span>
+<span class="dim">  Tasks:   12</span>
+<span class="dim">  Heal:    auto</span>
+
+<span class="prompt">$</span> agent-threader status
+<span class="bold">Run run-2026-04-02: RUNNING</span>
+<span class="dim">  DONE       8</span>
+<span class="dim">  RUNNING    2</span>
+<span class="dim">  PENDING    2</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="install" class="install-section">
+      <div class="container">
+        <h2>Quick Start</h2>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <pre><code><span class="prompt">$</span> bash &lt;(curl -fsSL https://agentthreader.com/install.sh) --all
+<span class="dim">==&gt; Bootstrapping agent-threader@latest</span>
+<span class="dim">--&gt; Installing agent-threader@latest globally...</span>
+<span class="dim">--&gt; Delegating to local installer...</span>
+<span class="success">==&gt; Done.</span></code></pre>
+        </div>
+        <p class="install-note">The hosted bootstrap script installs the published package, then delegates to the packaged <code>install-local.sh</code> to copy compiled skills into your detected tools.</p>
+        <div class="install-links">
+          <a href="/install.sh" class="text-link">View install.sh</a>
+          <a href="https://github.com/barretts/AgentThreader" class="text-link">Repository</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container">
+        <p>MIT License &middot; <a href="https://github.com/barretts/AgentThreader">github.com/barretts/AgentThreader</a></p>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

@@ -16,8 +16,12 @@
   },
   "files": [
     "dist",
+    "compiled",
     "skill",
-    "README.md"
+    "site",
+    "README.md",
+    "install.sh",
+    "install-local.sh"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -25,10 +29,10 @@
     "test:watch": "vitest",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "setup": "bash install.sh",
-    "setup:all": "bash install.sh --all",
-    "install-skills": "bash install.sh --skills-only",
-    "uninstall-skills": "bash install.sh --uninstall",
+    "setup": "bash install-local.sh",
+    "setup:all": "bash install-local.sh --all",
+    "install-skills": "bash install-local.sh --skills-only",
+    "uninstall-skills": "bash install-local.sh --uninstall",
     "compile": "node skill/build/compile.mjs",
     "compile:validate": "node skill/build/compile.mjs --validate",
     "compile:watch": "node skill/build/compile.mjs --watch"

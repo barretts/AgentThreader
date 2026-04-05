@@ -37,7 +37,9 @@ agent-threader/
         agent-threader.md   # Composed skill source with {{include:...}}
   compiled/                 # Machine-generated IDE-specific outputs
   platforms/                # Thin translation layers for Codex, Cursor, Claude, Windsurf
-  install.sh                # One-command setup for all supported tools
+  site/                     # GitHub Pages site and hosted bootstrap installer
+  install.sh                # Hosted bootstrap installer for curl-based setup
+  install-local.sh          # Full local installer for clone-based development
 ```
 
 ## Core Design
@@ -62,10 +64,21 @@ See [SPEC.md](./skill/SPEC.md) for the full contract and runtime rules.
 
 ## Setup
 
+### Remote bootstrap installer
+
 ```bash
-bash install.sh          # Auto-detect tools and install
-bash install.sh --all    # Install for all five tools
-bash install.sh --cursor # Install for Cursor only
+bash <(curl -fsSL https://agentthreader.com/install.sh) --all
+bash <(curl -fsSL https://agentthreader.com/install.sh) --cursor
+```
+
+The hosted bootstrap script installs the published `agent-threader` package globally and then delegates to the packaged `install-local.sh` to copy the compiled skills into your selected tools.
+
+### Local clone-based setup
+
+```bash
+bash install-local.sh          # Auto-detect tools and install
+bash install-local.sh --all    # Install for all five tools
+bash install-local.sh --cursor # Install for Cursor only
 ```
 
 ## Development
@@ -76,6 +89,7 @@ npm run build            # Compile TypeScript CLI
 npm run compile          # Compile skills to all IDE targets
 npm run compile:validate # Validate manifest vs source includes
 npm run compile:watch    # Recompile on change
+bash install-local.sh    # Build, compile, link CLI, and install skills locally
 ```
 
 ## CLI Commands
