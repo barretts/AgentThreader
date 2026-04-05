@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { ManifestV2 } from "./types.js";
 import { ConfigError } from "../errors/types.js";
+import { validateManifestSchema } from "./schema-validator.js";
 
 export interface ValidateManifestOptions {
   manifestPath: string;
@@ -37,18 +38,11 @@ export function validateManifest(options: ValidateManifestOptions): ValidateMani
     throw new ConfigError(options.manifestPath, `Invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  const obj = data as Record<string, unknown>;
-
-  if (obj.manifest_version !== "2.0") {
-    issues.push({ severity: "error", message: `Expected manifest_version "2.0", got "${String(obj.manifest_version)}"` });
-  }
-
-  if (typeof obj.run_id !== "string" || obj.run_id.length === 0) {
-    issues.push({ severity: "error", message: "Missing or empty run_id" });
-  }
-
-  if (!Array.isArray(obj.tasks)) {
-    issues.push({ severity: "error", message: "Missing or invalid tasks array" });
+  const schemaResult = validateManifestSchema(data);
+  if (!schemaResult.valid) {
+    for (const err of schemaResult.errors) {
+      issues.push({ severity: "error", message: `${err.path}: ${err.message}` });
+    }
     return { valid: false, taskCount: 0, issues, dependencyOrder: [], warnings };
   }
 
