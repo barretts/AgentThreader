@@ -1,4 +1,4 @@
-import { getStatus, type StatusOptions, type StatusResult } from '../../core/status.js';
+import { getStatus, type StatusOptions, type StatusResult } from '../../lib/state/status.js';
 
 export interface StatusCommandOptions extends StatusOptions {
   json: boolean;

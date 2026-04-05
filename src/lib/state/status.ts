@@ -1,3 +1,4 @@
+import type { StateV2 } from "./types.js";
 import { loadState } from "./state.js";
 
 export interface StatusOptions {
@@ -19,42 +20,44 @@ export interface StatusResult {
   taskSummary: Record<string, number>;
   totalTasks: number;
   healingRounds: number;
-  lastHealDecision?: string;
+  lastHealDecision: string | null;
   failedTasks: FailedTaskInfo[];
-  warnings: string[];
 }
 
 export function getStatus(options: StatusOptions): StatusResult {
-  const state = loadState(options.statePath);
+  const state: StateV2 = loadState(options.statePath);
 
   const taskSummary: Record<string, number> = {};
   const failedTasks: FailedTaskInfo[] = [];
+  let totalTasks = 0;
 
-  for (const [taskId, taskState] of Object.entries(state.tasks)) {
-    taskSummary[taskState.status] = (taskSummary[taskState.status] ?? 0) + 1;
+  for (const [taskId, ts] of Object.entries(state.tasks)) {
+    totalTasks++;
+    taskSummary[ts.status] = (taskSummary[ts.status] ?? 0) + 1;
 
-    if (taskState.status === "FAILED" || taskState.status === "ESCALATED" || taskState.status === "BLOCKED") {
+    if (ts.status === "FAILED" || ts.status === "ESCALATED" || ts.status === "BLOCKED") {
       failedTasks.push({
         taskId,
-        status: taskState.status,
-        failureClass: taskState.last_failure_class,
-        failureSignature: taskState.last_failure_signature,
-        workerAttempts: taskState.worker_attempts,
+        status: ts.status,
+        failureClass: ts.last_failure_class,
+        failureSignature: ts.last_failure_signature,
+        workerAttempts: ts.worker_attempts,
       });
     }
   }
 
-  const lastRound = state.healing_rounds[state.healing_rounds.length - 1];
+  const lastRound = state.healing_rounds.length > 0
+    ? state.healing_rounds[state.healing_rounds.length - 1]
+    : null;
 
   return {
     runId: state.run_id,
     runStatus: state.run_status,
     abortReason: state.abort_reason,
     taskSummary,
-    totalTasks: Object.keys(state.tasks).length,
+    totalTasks,
     healingRounds: state.healing_rounds.length,
-    lastHealDecision: lastRound?.decision,
+    lastHealDecision: lastRound?.decision ?? null,
     failedTasks,
-    warnings: [],
   };
 }

@@ -1,3 +1,4 @@
+import type { StateV2 } from "./types.js";
 import { loadState } from "./state.js";
 
 export interface LogsOptions {
@@ -18,17 +19,20 @@ export interface LogEntry {
 
 export interface LogsResult {
   entries: LogEntry[];
-  warnings: string[];
 }
 
 export function getLogs(options: LogsOptions): LogsResult {
-  const state = loadState(options.statePath);
-  let entries: LogEntry[] = [];
+  const state: StateV2 = loadState(options.statePath);
+  const entries: LogEntry[] = [];
 
-  for (const [taskId, taskState] of Object.entries(state.tasks)) {
-    for (const h of taskState.history) {
+  for (const [taskId, ts] of Object.entries(state.tasks)) {
+    if (options.taskId && taskId !== options.taskId) continue;
+
+    for (const h of ts.history) {
+      if (options.phase && h.phase !== options.phase) continue;
+
       entries.push({
-        taskId,
+        taskId: h.task_id,
         phase: h.phase,
         attempt: h.attempt_number,
         logPath: h.log_path,
@@ -39,14 +43,7 @@ export function getLogs(options: LogsOptions): LogsResult {
     }
   }
 
-  if (options.taskId) {
-    entries = entries.filter(e => e.taskId === options.taskId);
-  }
-  if (options.phase) {
-    entries = entries.filter(e => e.phase === options.phase);
-  }
-
   entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
-  return { entries, warnings: [] };
+  return { entries };
 }

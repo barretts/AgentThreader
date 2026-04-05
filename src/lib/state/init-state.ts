@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
-import type { ManifestV2, RunPolicy } from "./types.js";
+import type { ManifestV2 } from "../contracts/types.js";
+import type { RunPolicy } from "./types.js";
+import { DEFAULT_POLICY } from "./types.js";
 import { initializeState, writeState } from "./state.js";
 import { ConfigError } from "../errors/types.js";
+import { validateManifestSchema } from "../contracts/schema-validator.js";
 
 export interface InitStateOptions {
   manifestPath: string;
@@ -15,11 +18,10 @@ export interface InitStateResult {
   runId: string;
   taskCount: number;
   policy: RunPolicy;
-  warnings: string[];
 }
 
 export async function initState(options: InitStateOptions): Promise<InitStateResult> {
-  const warnings: string[] = [];
+  const outputPath = options.outputPath ?? ".agentic/state.json";
 
   let raw: string;
   try {
@@ -28,43 +30,44 @@ export async function initState(options: InitStateOptions): Promise<InitStateRes
     throw new ConfigError(options.manifestPath, `Cannot read manifest: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  let manifest: ManifestV2;
+  let data: unknown;
   try {
-    manifest = JSON.parse(raw) as ManifestV2;
+    data = JSON.parse(raw);
   } catch (e) {
     throw new ConfigError(options.manifestPath, `Invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  if (manifest.manifest_version !== "2.0") {
-    throw new ConfigError(options.manifestPath, `Expected manifest_version "2.0", got "${String(manifest.manifest_version)}"`);
+  const schemaResult = validateManifestSchema(data);
+  if (!schemaResult.valid) {
+    const msgs = schemaResult.errors.map(e => `${e.path}: ${e.message}`).join("; ");
+    throw new ConfigError(options.manifestPath, `Schema validation failed: ${msgs}`);
   }
 
-  const policyOverrides: Partial<RunPolicy> = {};
+  const manifest = data as ManifestV2;
+
+  const policy: RunPolicy = { ...DEFAULT_POLICY };
+
   if (options.heal) {
     const valid = ["auto", "off", "task", "batch", "epoch"] as const;
-    if (!valid.includes(options.heal as typeof valid[number])) {
-      throw new ConfigError("--heal", `Must be one of: ${valid.join(", ")}`);
+    if (valid.includes(options.heal as typeof valid[number])) {
+      policy.heal_schedule = options.heal as RunPolicy["heal_schedule"];
     }
-    policyOverrides.heal_schedule = options.heal as RunPolicy["heal_schedule"];
   }
+
   if (options.batchStrategy) {
     const valid = ["fibonacci", "fixed"] as const;
-    if (!valid.includes(options.batchStrategy as typeof valid[number])) {
-      throw new ConfigError("--batch-strategy", `Must be one of: ${valid.join(", ")}`);
+    if (valid.includes(options.batchStrategy as typeof valid[number])) {
+      policy.batch_strategy = options.batchStrategy as RunPolicy["batch_strategy"];
     }
-    policyOverrides.batch_strategy = options.batchStrategy as RunPolicy["batch_strategy"];
   }
 
-  const state = initializeState(manifest, policyOverrides);
-  const statePath = options.outputPath ?? ".agentic/state.json";
-
-  await writeState(statePath, state);
+  const state = initializeState(manifest, policy);
+  writeState(outputPath, state);
 
   return {
-    statePath,
+    statePath: outputPath,
     runId: state.run_id,
     taskCount: manifest.tasks.length,
     policy: state.policy,
-    warnings,
   };
 }

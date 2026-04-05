@@ -1,4 +1,4 @@
-import { getLogs, type LogsOptions, type LogsResult } from '../../core/logs.js';
+import { getLogs, type LogsOptions, type LogsResult } from '../../lib/state/logs.js';
 
 export interface LogsCommandOptions extends LogsOptions {
   json: boolean;

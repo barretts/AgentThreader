@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { AppError } from '../errors/types.js';
+import { AppError } from '../lib/errors/types.js';
 import { validateManifestCommand } from './commands/validate-manifest.js';
 import { initStateCommand } from './commands/init-state.js';
 import { parseResultCommand } from './commands/parse-result.js';
