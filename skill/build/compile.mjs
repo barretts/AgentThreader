@@ -13,9 +13,35 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..",
 const SKILL_DIR = path.join(ROOT, "skill");
 const FRAGMENTS_DIR = path.join(SKILL_DIR, "fragments");
 const SKILLS_DIR = path.join(SKILL_DIR, "skills");
-const PLATFORMS_DIR = path.join(ROOT, "platforms");
+const MANIFEST_PATH = path.join(SKILL_DIR, "build", "manifest.json");
 const COMPILED_DIR = path.join(ROOT, "compiled");
 const MANAGED_MARKER = "managed_by: agent-threader";
+
+function loadManifest() {
+  if (!existsSync(MANIFEST_PATH)) {
+    console.error(`  ERROR: manifest not found: ${MANIFEST_PATH}`);
+    process.exit(1);
+  }
+
+  const raw = readFileSync(MANIFEST_PATH, "utf8");
+  const manifest = JSON.parse(raw);
+  const skills = manifest?.skills;
+
+  if (!skills || typeof skills !== "object" || Array.isArray(skills)) {
+    console.error("  ERROR: manifest.json must contain an object at skills");
+    process.exit(1);
+  }
+
+  return manifest;
+}
+
+function getSkillEntries(manifest) {
+  return Object.entries(manifest.skills);
+}
+
+function extractIncludes(raw) {
+  return [...new Set([...raw.matchAll(/\{\{include:([\w/.-]+)\}\}/g)].map(([, ref]) => ref))];
+}
 
 // ─── Fragment inclusion ──────────────────────────────────────────────────────
 
@@ -32,8 +58,8 @@ function resolveIncludes(content, baseDir) {
   });
 }
 
-function compileSkill(skillName) {
-  const skillSrc = path.join(SKILLS_DIR, skillName, `${skillName}.md`);
+function compileSkill(skillName, sourceRelPath) {
+  const skillSrc = path.join(SKILL_DIR, sourceRelPath);
   if (!existsSync(skillSrc)) {
     console.error(`  ERROR: skill source not found: ${skillSrc}`);
     process.exit(1);
@@ -47,29 +73,65 @@ function compileSkill(skillName) {
 
 function validateFragmentRefs() {
   let errors = 0;
-  const skillDirs = readdirSync(SKILLS_DIR).filter(d =>
-    statSync(path.join(SKILLS_DIR, d)).isDirectory()
-  );
+  const manifest = loadManifest();
+  const skillEntries = getSkillEntries(manifest);
 
-  for (const skillName of skillDirs) {
-    const skillSrc = path.join(SKILLS_DIR, skillName, `${skillName}.md`);
-    if (!existsSync(skillSrc)) continue;
+  for (const [skillName, skillConfig] of skillEntries) {
+    if (!skillConfig || typeof skillConfig !== "object") {
+      console.error(`  INVALID: ${skillName} manifest entry must be an object`);
+      errors++;
+      continue;
+    }
+
+    const source = skillConfig.source;
+    const declaredFragments = Array.isArray(skillConfig.fragments) ? skillConfig.fragments : [];
+
+    if (typeof source !== "string" || source.length === 0) {
+      console.error(`  INVALID: ${skillName} must declare a non-empty source path`);
+      errors++;
+      continue;
+    }
+
+    const skillSrc = path.join(SKILL_DIR, source);
+    if (!existsSync(skillSrc)) {
+      console.error(`  MISSING: ${skillName} source -> ${source}`);
+      errors++;
+      continue;
+    }
+
     const raw = readFileSync(skillSrc, "utf8");
-    const refs = [...raw.matchAll(/\{\{include:([\w/.-]+)\}\}/g)];
-    for (const [, ref] of refs) {
+    const referenced = extractIncludes(raw);
+
+    for (const ref of referenced) {
       const fragPath = path.join(FRAGMENTS_DIR, ref);
       if (!existsSync(fragPath)) {
-        console.error(`  MISSING: ${skillName} -> ${ref}`);
+        console.error(`  MISSING: ${skillName} include -> ${ref}`);
+        errors++;
+      }
+      if (!declaredFragments.includes(ref)) {
+        console.error(`  UNDECLARED: ${skillName} includes ${ref} but manifest does not declare it`);
+        errors++;
+      }
+    }
+
+    for (const ref of declaredFragments) {
+      const fragPath = path.join(FRAGMENTS_DIR, ref);
+      if (!existsSync(fragPath)) {
+        console.error(`  MISSING: ${skillName} declared fragment -> ${ref}`);
+        errors++;
+      }
+      if (!referenced.includes(ref)) {
+        console.error(`  UNUSED: ${skillName} declares ${ref} but source does not include it`);
         errors++;
       }
     }
   }
 
   if (errors > 0) {
-    console.error(`\nValidation failed: ${errors} missing fragment(s).`);
+    console.error(`\nValidation failed: ${errors} issue(s).`);
     process.exit(1);
   }
-  console.log("All fragment references valid.");
+  console.log("Manifest and fragment references are valid.");
 }
 
 // ─── Emit helpers ────────────────────────────────────────────────────────────
@@ -121,14 +183,17 @@ function emitCodex(skillName, compiledContent) {
 
 function build() {
   console.log("==> Compiling skills...");
+  const manifest = loadManifest();
+  const skillEntries = getSkillEntries(manifest);
 
-  const skillDirs = readdirSync(SKILLS_DIR).filter(d =>
-    statSync(path.join(SKILLS_DIR, d)).isDirectory()
-  );
-
-  for (const skillName of skillDirs) {
+  for (const [skillName, skillConfig] of skillEntries) {
+    const source = skillConfig?.source;
+    if (typeof source !== "string" || source.length === 0) {
+      console.error(`  ERROR: ${skillName} must declare a non-empty source path in manifest`);
+      process.exit(1);
+    }
     console.log(`  ${skillName}:`);
-    const compiled = compileSkill(skillName);
+    const compiled = compileSkill(skillName, source);
 
     emitClaude(skillName, compiled);
     emitCursor(skillName, compiled);
@@ -163,6 +228,10 @@ if (args.includes("--validate")) {
       }
     }
   }
+  watchFile(MANIFEST_PATH, { interval: 1000 }, () => {
+    console.log(`\nChange detected: ${path.relative(ROOT, MANIFEST_PATH)}`);
+    build();
+  });
 } else {
   build();
 }

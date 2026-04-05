@@ -69,9 +69,16 @@ See [SPEC.md](./skill/SPEC.md) for the full contract and runtime rules.
 ```bash
 bash <(curl -fsSL https://agentthreader.com/install.sh) --all
 bash <(curl -fsSL https://agentthreader.com/install.sh) --cursor
+npx --yes agent-threader@latest --help
 ```
 
 The hosted bootstrap script installs the published `agent-threader` package globally and then delegates to the packaged `install-local.sh` to copy the compiled skills into your selected tools.
+
+Use `npx` when you want one-off CLI usage without global install:
+
+```bash
+npx --yes agent-threader@latest validate-manifest ./manifest.json --json
+```
 
 ### Local clone-based setup
 
@@ -95,15 +102,24 @@ bash install-local.sh    # Build, compile, link CLI, and install skills locally
 ## CLI Commands
 
 ```bash
-agent-threader validate-manifest <path>   # Validate a manifest.v2 file
-agent-threader init-state <manifest-path> # Initialize state from manifest
-agent-threader parse-result <log-path>    # Extract task_result.v2 from worker log
-agent-threader parse-heal <log-path>      # Extract heal_decision.v2 from healer log
-agent-threader status [state-path]        # Display run status
-agent-threader logs [state-path]          # List log files from state history
+agent-threader validate-manifest <path>   # Alias: validate
+agent-threader init-state <manifest-path> # Alias: init
+agent-threader parse-result <log-path>    # Alias: parse
+agent-threader parse-heal <log-path>      # Alias: heal
+agent-threader status [state-path]        # Alias: st
+agent-threader logs [state-path]          # Alias: history
+agent-threader doctor                     # Alias: diag
+agent-threader explain [code]             # Alias: why
 ```
 
 All commands support `--json` for machine-readable output.
+
+## Release Automation
+
+The release workflow in `.github/workflows/release.yml` expects:
+
+- `AGENT_TOKEN` - GitHub token with permission to push release commits and tags
+- `AGENT_NPM_TOKEN` - npm automation token used as `NODE_AUTH_TOKEN` for publish
 
 ## License
 
