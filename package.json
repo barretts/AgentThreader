@@ -4,7 +4,7 @@
   "description": "AgentThreader -- skill + companion CLI for manifest-driven agentic CLI orchestration with structured contracts, resumable state, and bounded self-healing",
   "type": "module",
   "bin": {
-    "agent-threader": "./dist/cli/index.js"
+    "agent-threader": "dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
