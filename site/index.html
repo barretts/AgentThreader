@@ -118,9 +118,12 @@
 <span class="dim">==&gt; Bootstrapping agent-threader@latest</span>
 <span class="dim">--&gt; Installing agent-threader@latest globally...</span>
 <span class="dim">--&gt; Delegating to local installer...</span>
-<span class="success">==&gt; Done.</span></code></pre>
+<span class="success">==&gt; Done.</span>
+
+<span class="prompt">$</span> npx --yes agent-threader@latest --help</code></pre>
         </div>
         <p class="install-note">The hosted bootstrap script installs the published package, then delegates to the packaged <code>install-local.sh</code> to copy compiled skills into your detected tools.</p>
+        <p class="install-note">Release automation uses <code>AGENT_TOKEN</code> for release commit/tag push and <code>AGENT_NPM_TOKEN</code> for npm publish.</p>
         <div class="install-links">
           <a href="/install.sh" class="text-link">View install.sh</a>
           <a href="https://github.com/barretts/AgentThreader" class="text-link">Repository</a>

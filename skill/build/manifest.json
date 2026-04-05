@@ -1,0 +1,21 @@
+{
+  "version": "1",
+  "skills": {
+    "agent-threader": {
+      "source": "skills/agent-threader/agent-threader.md",
+      "fragments": [
+        "domain/architecture-overview.md",
+        "domain/contracts.md",
+        "domain/pbh-healing.md",
+        "domain/verification-safety.md",
+        "domain/adapter-model.md",
+        "domain/state-resume.md",
+        "meta/schemas-reference.md",
+        "meta/templates-reference.md",
+        "common/model-selection.md",
+        "common/portability-rules.md",
+        "common/workflow.md"
+      ]
+    }
+  }
+}

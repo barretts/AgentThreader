@@ -2,13 +2,18 @@
 # install.sh -- Bootstrap installer for the published agent-threader package
 # Usage: bash <(curl -fsSL https://agentthreader.com/install.sh) [--claude] [--cursor] [--windsurf] [--opencode] [--codex] [--all]
 
-set -e
+set -euo pipefail
 
 PROJECT_NAME="${AGENT_THREADER_PACKAGE_NAME:-agent-threader}"
 PROJECT_VERSION="${AGENT_THREADER_PACKAGE_VERSION:-latest}"
 CLI_BIN_NAME="agent-threader"
 PACKAGE_SPEC="${PROJECT_NAME}@${PROJECT_VERSION}"
 INSTALLER_ARGS=("$@")
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "ERROR: npm is required but was not found in PATH."
+  exit 1
+fi
 
 echo "==> Bootstrapping ${PACKAGE_SPEC}"
 echo "--> Installing ${PACKAGE_SPEC} globally..."
