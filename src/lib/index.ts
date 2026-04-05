@@ -1,5 +1,7 @@
 // ─── Errors ──────────────────────────────────────────────────────────────────
 export { AppError, NotFoundError, CommandError, ConfigError } from './errors/types.js';
+export { explainErrorCode, listKnownErrorCodes } from './errors/explain-error.js';
+export type { ErrorExplanation } from './errors/explain-error.js';
 
 // ─── Contract Types ──────────────────────────────────────────────────────────
 export type {
@@ -59,6 +61,10 @@ export type { ParseResultOptions, ParseResultResult } from './parser/parse-resul
 
 export { parseHeal } from './parser/parse-heal.js';
 export type { ParseHealOptions, ParseHealResult } from './parser/parse-heal.js';
+
+// ─── Diagnostics ─────────────────────────────────────────────────────────────
+export { runDoctor } from './diagnostics/doctor.js';
+export type { DoctorOptions, DoctorResult, DoctorCheck, DoctorStatus } from './diagnostics/doctor.js';
 
 // ─── Orchestrator Primitives ─────────────────────────────────────────────────
 export {
