@@ -21,7 +21,9 @@
     "site",
     "README.md",
     "install.sh",
-    "install-local.sh"
+    "install.ps1",
+    "install-local.sh",
+    "install-local.ps1"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
