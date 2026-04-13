@@ -265,6 +265,20 @@ body {
 .terminal .dim { color: var(--text-dim); }
 .terminal .bold { color: var(--text); font-weight: 700; }
 
+.install-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.install-panel h3 {
+  text-align: center;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .install-note {
   text-align: center;
   color: var(--text-dim);
@@ -314,6 +328,7 @@ footer a {
   .cli-section h2,
   .install-section h2 { font-size: 1.6rem; }
   .grid { grid-template-columns: 1fr; }
+  .install-panels { grid-template-columns: 1fr; }
   .contract-grid { flex-direction: column; align-items: center; }
   .hero { padding: 4rem 0 3rem; }
 }
