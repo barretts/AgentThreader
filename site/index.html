@@ -108,6 +108,9 @@
     <section id="install" class="install-section">
       <div class="container">
         <h2>Quick Start</h2>
+        <div class="install-panels">
+          <div class="install-panel">
+            <h3>macOS / Linux</h3>
         <div class="terminal">
           <div class="terminal-bar">
             <span class="dot red"></span>
@@ -122,10 +125,30 @@
 
 <span class="prompt">$</span> npx --yes agent-threader@latest --help</code></pre>
         </div>
+          </div>
+          <div class="install-panel">
+            <h3>Windows PowerShell</h3>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <pre><code><span class="prompt">PS&gt;</span> &amp; ([ScriptBlock]::Create((Invoke-RestMethod 'https://agentthreader.com/install.ps1'))) -All
+<span class="dim">==&gt; Bootstrapping agent-threader@latest</span>
+<span class="dim">--&gt; Installing agent-threader@latest globally...</span>
+<span class="dim">--&gt; Delegating to local installer...</span>
+<span class="success">==&gt; Done.</span>
+
+<span class="prompt">PS&gt;</span> powershell -ExecutionPolicy Bypass -File .\install-local.ps1 -All</code></pre>
+        </div>
+          </div>
+        </div>
         <p class="install-note">The hosted bootstrap script installs the published package, then delegates to the packaged <code>install-local.sh</code> to copy compiled skills into your detected tools.</p>
         <p class="install-note">Release automation uses <code>AGENT_TOKEN</code> for release commit/tag push and <code>AGENT_NPM_TOKEN</code> for npm publish.</p>
         <div class="install-links">
           <a href="/install.sh" class="text-link">View install.sh</a>
+          <a href="/install.ps1" class="text-link">View install.ps1</a>
           <a href="https://github.com/barretts/AgentThreader" class="text-link">Repository</a>
         </div>
       </div>

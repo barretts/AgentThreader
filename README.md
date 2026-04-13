@@ -39,7 +39,9 @@ agent-threader/
   platforms/                # Thin translation layers for Codex, Cursor, Claude, Windsurf
   site/                     # GitHub Pages site and hosted bootstrap installer
   install.sh                # Hosted bootstrap installer for curl-based setup
+  install.ps1               # Hosted bootstrap installer for PowerShell setup
   install-local.sh          # Full local installer for clone-based development
+  install-local.ps1         # Full local installer for PowerShell development setup
 ```
 
 ## Core Design
@@ -72,7 +74,12 @@ bash <(curl -fsSL https://agentthreader.com/install.sh) --cursor
 npx --yes agent-threader@latest --help
 ```
 
-The hosted bootstrap script installs the published `agent-threader` package globally and then delegates to the packaged `install-local.sh` to copy the compiled skills into your selected tools.
+```powershell
+powershell -ExecutionPolicy Bypass -Command "& ([ScriptBlock]::Create((Invoke-RestMethod 'https://agentthreader.com/install.ps1'))) -All"
+powershell -ExecutionPolicy Bypass -Command "& ([ScriptBlock]::Create((Invoke-RestMethod 'https://agentthreader.com/install.ps1'))) -Cursor"
+```
+
+The hosted bootstrap scripts install the published `agent-threader` package globally and then delegate to the packaged `install-local` script for your shell to copy the compiled skills into your selected tools.
 
 Use `npx` when you want one-off CLI usage without global install:
 
@@ -86,6 +93,12 @@ npx --yes agent-threader@latest validate-manifest ./manifest.json --json
 bash install-local.sh          # Auto-detect tools and install
 bash install-local.sh --all    # Install for all five tools
 bash install-local.sh --cursor # Install for Cursor only
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-local.ps1
+powershell -ExecutionPolicy Bypass -File .\install-local.ps1 -All
+powershell -ExecutionPolicy Bypass -File .\install-local.ps1 -Cursor
 ```
 
 ## Development
