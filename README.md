@@ -139,6 +139,16 @@ The release workflow in `.github/workflows/release.yml` expects:
 - `AGENT_TOKEN` - GitHub token with permission to push release commits and tags
 - `AGENT_NPM_TOKEN` - npm automation token used as `NODE_AUTH_TOKEN` for publish
 
+## Ecosystem
+
+AgentThreader is built on the skill-system-template architecture from [Agentic Skill Mill](https://github.com/barretts/AgenticSkillMill). Related projects:
+
+| Project | Role | Links |
+|---------|------|-------|
+| **[Agentic Skill Mill](https://github.com/barretts/AgenticSkillMill)** | Parent — defines the fragment-composition, 7-target compiler, and companion-CLI pattern | [agenticskillmill.com](https://agenticskillmill.com) |
+| **[TechDemoDirector](https://github.com/barretts/TechDemoDirector)** | Sibling — code walk-through presentation scripting | [Site](https://barretts.github.io/TechDemoDirector) |
+| **[AgentHistoric](https://github.com/barretts/AgentHistoric)** | Sibling — MoE persona prompt system with philosophical grounding | [agenthistoric.com](https://agenthistoric.com) |
+
 ## License
 
 MIT. See [LICENSE](./LICENSE).
