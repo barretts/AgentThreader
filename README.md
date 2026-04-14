@@ -70,13 +70,14 @@ See [SPEC.md](./skill/SPEC.md) for the full contract and runtime rules.
 
 ```bash
 bash <(curl -fsSL https://agentthreader.com/install.sh) --all
-bash <(curl -fsSL https://agentthreader.com/install.sh) --cursor
+```
+
+```bash
 npx --yes agent-threader@latest --help
 ```
 
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "& ([ScriptBlock]::Create((Invoke-RestMethod 'https://agentthreader.com/install.ps1'))) -All"
-powershell -ExecutionPolicy Bypass -Command "& ([ScriptBlock]::Create((Invoke-RestMethod 'https://agentthreader.com/install.ps1'))) -Cursor"
 ```
 
 The hosted bootstrap scripts install the published `agent-threader` package globally and then delegate to the packaged `install-local` script for your shell to copy the compiled skills into your selected tools.
@@ -91,14 +92,18 @@ npx --yes agent-threader@latest validate-manifest ./manifest.json --json
 
 ```bash
 bash install-local.sh          # Auto-detect tools and install
+```
+
+```bash
 bash install-local.sh --all    # Install for all five tools
-bash install-local.sh --cursor # Install for Cursor only
 ```
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-local.ps1
+```
+
+```powershell
 powershell -ExecutionPolicy Bypass -File .\install-local.ps1 -All
-powershell -ExecutionPolicy Bypass -File .\install-local.ps1 -Cursor
 ```
 
 ## Development
