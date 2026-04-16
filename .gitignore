@@ -28,7 +28,7 @@ artifacts/
 /state/
 
 # Skill system
-compiled/
+lessons
 .skill-cache/
 .agent/
 

@@ -19,6 +19,7 @@ function makeTaskState(status: TaskState['status']): TaskState {
     healer_attempts: 0,
     last_failure_class: null,
     last_failure_signature: null,
+    last_log_tail: null,
     applied_patch_ids: [],
     history: [],
   };

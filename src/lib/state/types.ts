@@ -26,6 +26,8 @@ export interface TaskState {
   healer_attempts: number;
   last_failure_class: string | null;
   last_failure_signature: string | null;
+  /** Extracted diagnostic lines from the last execution for healer visibility. */
+  last_log_tail: string | null;
   applied_patch_ids: string[];
   history: HistoryEntry[];
 }
@@ -41,6 +43,8 @@ export interface RunPolicy {
   max_heal_rounds_per_window: number;
   max_total_heal_rounds: number;
   signature_repeat_limit: number;
+  /** Concurrency level for parallel task execution. 0 = use manifest policy. */
+  concurrency: number;
 }
 
 // ─── Healing Round ───────────────────────────────────────────────────────────
@@ -79,6 +83,7 @@ export const DEFAULT_POLICY: RunPolicy = {
   max_heal_rounds_per_window: 2,
   max_total_heal_rounds: 8,
   signature_repeat_limit: 2,
+  concurrency: 1,
 };
 
 export const FIBONACCI_BATCH_SEQUENCE = [1, 2, 3, 5, 8, 13] as const;

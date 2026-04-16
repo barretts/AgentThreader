@@ -6,6 +6,7 @@ import type {
   ParserErrorCode,
 } from "../contracts/types.js";
 import { validateTaskResultSchema, validateHealDecisionSchema } from "../contracts/schema-validator.js";
+import { stripTermEscapes } from "../term-utils.js";
 
 const TASK_RESULT_START = "<<<TASK_RESULT_V2>>>";
 const TASK_RESULT_END = "<<<END_TASK_RESULT_V2>>>";
@@ -29,7 +30,8 @@ export function parseHealDecision(
 export function parseTaskResultFromString(
   raw: string,
 ): TaskResultV2 | ParserFailure {
-  const extracted = extractLastFencedBlock(raw, TASK_RESULT_START, TASK_RESULT_END);
+  const cleaned = stripTermEscapes(raw);
+  const extracted = extractLastFencedBlock(cleaned, TASK_RESULT_START, TASK_RESULT_END);
   if (!extracted) {
     return fail("NO_SENTINEL", "No <<<TASK_RESULT_V2>>> block found in output");
   }
@@ -52,7 +54,8 @@ export function parseTaskResultFromString(
 export function parseHealDecisionFromString(
   raw: string,
 ): HealDecisionV2 | ParserFailure {
-  const extracted = extractLastFencedBlock(raw, HEAL_DECISION_START, HEAL_DECISION_END);
+  const cleaned = stripTermEscapes(raw);
+  const extracted = extractLastFencedBlock(cleaned, HEAL_DECISION_START, HEAL_DECISION_END);
   if (!extracted) {
     return fail("NO_SENTINEL", "No <<<HEAL_DECISION_V2>>> block found in output");
   }
@@ -118,13 +121,12 @@ function removeComments(text: string): string {
 
   while (i < text.length) {
     if (inString) {
-      if (text[i] === "\\" && i + 1 < text.length) {
-        result += text[i] + text[i + 1];
-        i += 2;
-        continue;
-      }
       if (text[i] === '"') {
-        inString = false;
+        let backslashes = 0;
+        for (let j = i - 1; j >= 0 && text[j] === "\\"; j--) backslashes++;
+        if (backslashes % 2 === 0) {
+          inString = false;
+        }
       }
       result += text[i];
       i++;

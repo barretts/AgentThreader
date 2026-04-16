@@ -11,6 +11,7 @@ import { statusCommand } from './commands/status.js';
 import { logsCommand } from './commands/logs.js';
 import { doctorCommand } from './commands/doctor.js';
 import { explainErrorCommand } from './commands/explain-error.js';
+import { scaffoldCommand } from './commands/scaffold.js';
 
 const program = new Command();
 
@@ -353,7 +354,61 @@ program
     }
   });
 
-// ── Error handling ───────────────────────────────────────────────────────────
+// ── scaffold ────────────────────────────────────────────────────────────────
+
+program
+  .command('scaffold')
+  .alias('new')
+  .description('Scaffold a new orchestrator project from the AgentThreader boilerplate')
+  .argument('<target-dir>', 'Directory to create the project in')
+  .option('--name <name>', 'Project name (defaults to directory name)')
+  .option('--force', 'Overwrite existing files', false)
+  .option('--json', 'Output as JSON', false)
+  .action((targetDir: string, options: { name?: string; force: boolean; json: boolean }) => {
+    try {
+      const result = scaffoldCommand({
+        targetDir,
+        projectName: options.name,
+        force: options.force,
+        json: options.json,
+      });
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(chalk.green(`Scaffolded project: ${result.projectName}`));
+        console.log(chalk.dim(`  Directory: ${result.targetDir}`));
+        console.log();
+
+        if (result.filesCreated.length > 0) {
+          console.log(chalk.bold(`Created ${result.filesCreated.length} files:`));
+          for (const f of result.filesCreated) {
+            console.log(chalk.dim(`  + ${f}`));
+          }
+        }
+
+        if (result.skipped.length > 0) {
+          console.log();
+          console.log(chalk.yellow(`Skipped ${result.skipped.length} existing files (use --force to overwrite):`));
+          for (const f of result.skipped) {
+            console.log(chalk.dim(`  ~ ${f}`));
+          }
+        }
+
+        console.log();
+        console.log(chalk.bold('Next steps:'));
+        console.log(chalk.dim(`  cd ${targetDir}`));
+        console.log(chalk.dim('  npm install'));
+        console.log(chalk.dim('  # Edit src/my-adapter.ts for your CLI agent'));
+        console.log(chalk.dim('  # Edit manifest.json for your tasks'));
+        console.log(chalk.dim('  npx tsx src/orchestrator.ts --manifest manifest.json'));
+      }
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+// ── Error handling ───────────────────────────────────────────────────────
 
 program.parse();
 

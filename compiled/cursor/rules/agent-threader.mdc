@@ -1,0 +1,408 @@
+---
+description: "agent-threader skill"
+globs: []
+alwaysApply: false
+---
+
+<!-- managed_by: agent-threader -->
+---
+name: agent-threader
+version: "2.0"
+description: "AgentThreader -- build or review manifest-driven agentic CLI orchestration with structured JSON contracts, schema-validated parsing, resumable state, dependency-aware scheduling, bounded self-healing, and orchestrator-owned verification."
+---
+
+# AgentThreader
+
+## When To Use This Skill
+
+Use this skill when manual chat execution no longer scales and the right answer is a repeatable runner around an agentic CLI.
+
+Matching requests include:
+
+- batch prompt runners over tasks, manifests, components, stories, or tickets
+- looping an agentic CLI (`agent`, `opencode`, `claude`) across many items
+- resumable or checkpointed agent loops with per-task logs
+- self-healing outer loops that diagnose failures and patch prompts
+- overnight or unattended batch runs with verification gates
+- stage-based workflows where items pass through multiple prompt phases
+- log triage followed by targeted recheck runs
+
+## Architecture
+
+### Architecture Overview
+
+The v2 system has five moving parts:
+
+1. **Manifest** -- declares work items, dependencies, timeouts, and verification profiles.
+2. **Orchestrator** -- owns scheduling, parsing, verification, checkpointing, healing, and retry policy. The orchestrator is the single source of truth for task status.
+3. **Adapters** -- CLI-specific execution layers (`agent`, `opencode`, `claude`) that the orchestrator calls through a uniform `CliAdapter` interface.
+4. **Worker** -- the model invocation that performs task work and emits a `task_result.v2` JSON contract fenced by `<<<TASK_RESULT_V2>>>` sentinels.
+5. **Healer** -- the model invocation that diagnoses fixable failures and emits a `heal_decision.v2` JSON contract fenced by `<<<HEAL_DECISION_V2>>>` sentinels.
+
+### Control Flow
+
+```text
+Manifest
+  -> Orchestrator
+    -> Adapter -> Worker
+    -> Parser and Schema Validator
+    -> Verification Gates
+    -> State Checkpoint
+    -> Healer (at batch checkpoints when policy requires)
+      -> Patch Validation and Application
+    -> Resume or Escalate
+```
+
+Worker and healer outputs are candidate data until the orchestrator validates and commits them to state. Exit code alone is never treated as task success.
+
+### Canonical Source Tree
+
+```text
+agent-threader/
+  SKILL.md          -- skill entrypoint
+  SPEC.md           -- normative architecture specification
+  schemas/          -- JSON schemas for all contracts
+  templates/        -- TypeScript scaffolding (types, parser, orchestrator utilities)
+  platforms/        -- thin wrappers for Codex, Cursor, Claude, Windsurf
+```
+
+---
+
+## Contracts
+
+### Contracts
+
+All public contracts are JSON, versioned (`"2.0"`), and schema-validated. Machine-readable schemas live in `schemas/`.
+
+### manifest.v2
+
+Declares tasks with required fields: `id`, `prompt_ref`, `depends_on`, `timeout_sec`, `verify_profile`. Optional: `context_refs`, `priority`, `retry_policy`, `metadata`.
+
+Tasks are topologically sorted by `depends_on`. Lower `priority` values run first. A task cannot start until all dependencies are `DONE`.
+
+### task_result.v2
+
+Emitted by the worker inside `<<<TASK_RESULT_V2>>>` / `<<<END_TASK_RESULT_V2>>>` sentinels.
+
+Required fields: `contract_version`, `task_id`, `status` (DONE | BLOCKED | FAILED | CONTRACT_ERROR), `summary`.
+
+Optional: `changed_files`, `writes[]` (with `path`, `op`, `encoding`, `content` or `content_ref`), `evidence` (commands, log_refs, notes), `failure_class`.
+
+### heal_decision.v2
+
+Emitted by the healer inside `<<<HEAL_DECISION_V2>>>` / `<<<END_HEAL_DECISION_V2>>>` sentinels.
+
+Required fields: `contract_version`, `scope` (task | batch | epoch), `decision` (RETRY | ESCALATE | NOT_FIXABLE), `failure_class`, `root_cause`, `patches[]`.
+
+Patch targets: `shared_context`, `task_prompt`, `runtime_patch`, `contract_hint`. Each patch has `target`, `operation` (replace | append | merge), and `content`.
+
+Optional: `learned_rule`, `escalations[]`, `retry_policy` (`reset_tasks`, `retry_window`).
+
+### state.v2
+
+Persistent run state with: `run_id`, `run_status` (RUNNING | COMPLETED | ABORTED), `policy`, per-task state (status, attempts, failure signatures, history), and `healing_rounds[]`. Written atomically via temp file + rename.
+
+---
+
+## Healing Model
+
+### Progressive Batch Healing (PBH)
+
+PBH is the default healing strategy. It starts with a small healing window, grows when stable, shrinks when unstable, and stops when automation is no longer justified.
+
+### Scheduling Modes
+
+| Mode | Meaning |
+| --- | --- |
+| `auto` | PBH with adaptive growth and shrink. **Default.** |
+| `off` | Healing disabled. |
+| `task` | Heal only the single failed task. Window size is always 1. |
+| `batch` | Heal at fixed batch checkpoints. Default fixed size is 5. |
+| `epoch` | Attempt all pending tasks before healing. |
+
+### PBH Defaults
+
+- `heal.schedule = auto`
+- `batch.strategy = fibonacci` (sequence: 1, 2, 3, 5, 8, 13, ...)
+- `failure_threshold = 0.2`
+- `max_worker_attempts_per_task = 2`
+- `max_heal_rounds_per_window = 2`
+- `max_total_heal_rounds = 8`
+- `signature_repeat_limit = 2`
+
+### PBH Behavior
+
+- Zero failures in a window: advance to the next larger batch size.
+- Failure rate > 0 but <= threshold: run healer once, retry the same window.
+- Failure rate > threshold: shrink one batch level, isolate repeated signatures.
+- Same signature repeats after healing: escalate that task.
+- No convergence (failing set unchanged across rounds): abort the run.
+
+### Healable vs Non-Healable
+
+Healable: `prompt_gap`, `missing_paths`, `weak_contract`, `contract_error`, `output_format`, `timeout`, `transient_infra`.
+
+Non-healable: `blocked_external`, `real_bug`.
+
+`build_error`, `test_error`, `smoke_error` may be healable when evidence points to prompt or configuration rather than a genuine product defect.
+
+### Red-Test False Failure Pattern
+
+When verification uses a red/green test suite pattern (see Verification and Safety Model), a red-test failure can produce a `smoke_error` failure class even though the green tests pass and the patch is correct. The healer SHOULD recognize this pattern: if the verifier log shows all green tests passing and only red tests failing, the failure is a false positive. The correct response is to refine the red test or accept the result, not to retry the patch.
+
+### Convergence
+
+Healing converges when at least one of: total failing count drops, repeated signature count drops, or a broad failure class narrows to a local issue. Healing is non-convergent when the same set persists, same signatures repeat, or budget is exhausted.
+
+### Healer Authority
+
+The healer may emit bounded runtime patches (`timeout_sec`, `concurrency`, `current_batch_size`) validated by the orchestrator against operator limits. The healer must not modify `heal.schedule`, `batch.strategy`, verification commands, protected-file rules, parser behavior, or model identity.
+
+---
+
+## Verification and Safety
+
+### Verification and Safety Model
+
+### Verification Ownership
+
+Verification always belongs to the orchestrator. It runs after successful parse and before final task success. The worker may report evidence, but does not own pass/fail classification.
+
+### Verification Layers
+
+| Layer | Timing | Purpose |
+| --- | --- | --- |
+| Post-parse validation | After parsing worker output | Contract integrity, candidate writes, path safety |
+| Post-write build/test | After writes are applied | Build, test, lint, or type failures caused by the change |
+| Final smoke/browser | After build and test pass | Runtime behavior, UI behavior, custom project checks |
+
+### Allowed Write Path
+
+1. Worker emits `writes[]` in `task_result.v2`.
+2. Orchestrator validates those writes.
+3. Orchestrator applies those writes.
+4. Orchestrator verifies the result.
+
+### Required Write Safeguards
+
+- Path normalization (writes cannot escape workspace root).
+- Protected-file denylist.
+- Shrinkage detection: reject replacement when original > 100 bytes and replacement < 50% of original size (unless explicitly allowed).
+- Optional `sha256_before` precondition validation.
+- Backup before write.
+- Rollback on verification failure.
+
+### Red/Green Test Suite Classification
+
+When a verification gate runs tests that contain both "red" suites (demonstrating a vulnerability or bug exists) and "green" suites (proving the fix works), the verifier MUST distinguish between them:
+
+- Suite name containing `"without patch"` = red test: failures are acceptable
+- Suite name containing `"with patch"` = green test: failures are mandatory pass
+
+If exit code is non-zero but all failures are in red suites and at least one green test passed, verification SHOULD pass. If any green test fails, verification MUST fail with specific test names reported.
+
+Worker prompts SHOULD enforce a naming convention:
+
+```javascript
+describe('TASK-ID - without patch (vulnerability exists)', () => { ... });
+describe('TASK-ID - with patch (vulnerability fixed)', () => { ... });
+```
+
+This pattern is especially important for security exploit testing, where red tests are best-effort vulnerability demos that may be fragile, version-dependent, or environment-specific. Only the green tests (proof of fix) should gate verification.
+
+### Self-Contained Output Directories
+
+When the worker produces output in a patch or task directory, that directory MUST be independently runnable. Each output directory SHOULD include a `package.json` declaring its dependencies so that the verifier can install them before running tests.
+
+The verification gate SHOULD auto-detect a `package.json` in the output directory and run `npm install --no-audit --no-fund` before executing tests. If `node_modules` already exists, the install step SHOULD be skipped.
+
+### Healer Patch Safety
+
+Healer patches follow the same validation model. The healer is forbidden from editing product source files directly, disabling verification, bypassing protected-file rules, or changing healing schedule mid-run.
+
+---
+
+## Adapter Model
+
+### Adapter Model
+
+Adapters are the only place where CLI-specific behavior lives. The orchestrator core never calls CLIs directly -- it goes through `CliAdapter.execute`.
+
+### Adapter Responsibilities
+
+- Construct the concrete CLI invocation (command, flags, working directory).
+- Decide whether prompt delivery uses stdin, argv, or PTY interaction.
+- Manage PTY or expect requirements for interactive CLIs.
+- Capture combined stdout and stderr to the execution log.
+- Return execution artifacts to the orchestrator.
+- Delegate contract parsing and schema validation to the shared parser utilities.
+
+### Orchestrator Boundary
+
+The orchestrator must:
+
+- Never call CLIs directly except through `CliAdapter.execute`.
+- Never parse raw logs without going through parser and validator modules.
+- Never assume exit code alone means success.
+- Remain CLI-agnostic outside the adapter boundary.
+
+### Reference Adapters
+
+Initial adapters: `agent`, `opencode`, `claude`. All share one orchestrator contract model.
+
+### Non-Interactive (Print Mode) Flags
+
+When running a CLI in non-interactive `--print` mode (e.g. Claude CLI), the adapter MUST configure:
+
+- **Turn budget**: Set `--max-turns` to at least 2x the expected tool-call count for the task pipeline. A 7-step pipeline typically requires 28+ turns; 50 is the recommended minimum. Exhausting turns produces exit code 1 with no output files and no recoverability.
+- **Permission bypass**: Include `--dangerously-skip-permissions` when running unattended. Without it, blocked permission prompts silently consume turns in print mode.
+- **External directory access**: If the worker needs to operate outside the workspace root (e.g. `/tmp`), add `--add-dir /tmp` to grant explicit access. Without it, file operations outside the workspace are denied even with `--dangerously-skip-permissions`.
+- **Tool restrictions**: Avoid restricting `--allowedTools` unless there is a specific security reason. Restricting tools does not reduce risk in print mode but does increase turn exhaustion by blocking expected operations.
+
+### Temp Directory Cleanup
+
+Workers that create temp directories outside the workspace root (e.g. `/tmp/vuln-*`) may fail to clean them up due to permission scoping. The orchestrator SHOULD add a post-run cleanup sweep for known temp directory patterns rather than relying on worker cleanup. Over many tasks, leaked temp directories with `node_modules` can accumulate significant disk usage.
+
+### Interactive CLI Handling
+
+For interactive CLIs, prompt rescue logic and TTY heuristics are adapter-local. Interactive adapters should implement ANSI stripping, bounded idle detection, finite rescue attempts, and explicit completion detection.
+
+### CliAdapter Interface
+
+```typescript
+interface CliAdapter {
+  id: string;
+  capabilities: { stdinPrompt: boolean; argPrompt: boolean; pty: boolean; interactive: boolean };
+  prepare(task, ctx): PreparedInvocation;
+  execute(invocation, ctx): Promise<ExecutionArtifact>;
+  extractResult(artifact, ctx): Promise<TaskResultV2 | ParserFailure>;
+  healthcheck(ctx): Promise<AdapterHealth>;
+}
+```
+
+---
+
+## State and Resume
+
+### State, Resume, and Convergence
+
+### Atomic State Writes
+
+Mandatory. The orchestrator writes state via a temporary file followed by atomic rename on the same filesystem. State is checkpointed after every task attempt and every healing round.
+
+### Resume Semantics
+
+- `DONE` tasks are skipped on resume if `manifest_digest` still matches.
+- If `manifest_digest` changes, the orchestrator warns or forces reconciliation.
+- `ESCALATED` tasks are not retried automatically.
+- `FAILED` and `BLOCKED` tasks are eligible only if retry policy allows.
+
+Reconciliation handles: tasks removed since last run, tasks added, tasks whose `prompt_ref`, `depends_on`, or `verify_profile` changed.
+
+### Failure Signature Generation
+
+Stable failure signatures follow this algorithm:
+
+1. Start with the normalized failure class.
+2. Extract the primary stable signal from parser output, verification logs, or error codes.
+3. Remove timestamps, absolute paths, task IDs, and unstable numbers.
+4. Lowercase and collapse whitespace.
+5. Truncate to a stable maximum length.
+
+Format: `<failure_class>:<normalized_signal>` (e.g., `build_error:missing_cn_import`).
+
+### Escalation Rules
+
+Per-task: escalate when a task repeats the same signature `signature_repeat_limit` times after healing, or when a non-healable failure exhausts retry policy.
+
+Per-run: escalate when `max_total_heal_rounds` is exhausted without convergence, or continuing would only repeat the same failure set.
+
+Escalated tasks remain in state for reporting. Aborted runs record `run_status: ABORTED` with a non-empty `abort_reason`.
+
+---
+
+## Normative Specification
+
+The full architecture, contracts, schemas, and behavioral rules are defined in `SPEC.md`. That document is the single source of truth. Read it when you need the end-to-end control flow, complete schema field definitions, or edge-case behavioral rules.
+
+## Canonical Source Of Truth
+
+### Schemas
+
+Machine-readable JSON schemas live in `schemas/`. The `$schema` meta-schema declaration is intentionally omitted -- default Ajv (draft-07) does not resolve draft-2020-12, and none of these schemas use 2020-12-specific features:
+
+| Schema | Contract |
+| --- | --- |
+| `manifest.v2.json` | Task manifest: tasks with deps, timeouts, verify profiles |
+| `verify_profile.v2.json` | Operator-defined verification profiles with steps and rollback flag |
+| `task_result.v2.json` | Worker output: task_id, status, summary, optional writes and evidence |
+| `heal_decision.v2.json` | Healer output: decision, patches, learned_rule |
+| `state.v2.json` | Persistent run state: run_status, policy, per-task state, healing_rounds |
+
+These schemas are the machine-readable authority. The orchestrator validates all contracts against them before state mutation.
+
+### Templates
+
+Reference implementation skeletons live in `templates/`:
+
+| File | Contents |
+| --- | --- |
+| `types.ts` | TypeScript type definitions for all v2 contracts: `ManifestV2`, `TaskResultV2`, `HealDecisionV2`, `StateV2`, `CliAdapter` interface, failure classes, PBH fibonacci sequence, default policy |
+| `parser.ts` | Shared parser and validator: sentinel extraction (last block wins), JSON repair (strip markdown fences, trailing commas, JS comments), task result and heal decision validation, failure signature generation |
+| `orchestrator.ts` | Shared runtime utilities: `writeAtomicJson` (temp file + rename) and `stableFailureSignature` (normalizes failure fingerprints) |
+
+These templates are starting points for downstream runner implementations. Copy them into your project and extend as needed.
+
+---
+
+## Model Selection
+
+### Self-Healing: Model Selection Rule
+
+When the user requests a self-healing runner, ask which models to use before generating code:
+
+- **Worker CLI and model** -- runs the inner loop (can be fast/cheap)
+- **Healer CLI and model** -- runs the outer diagnosis loop (should be more capable)
+
+If the user does not specify, state the defaults explicitly before proceeding:
+
+- Worker: the CLI the user is already using, default model
+- Healer: same CLI family, stronger model tier
+
+---
+
+## Portability
+
+### Portability Rules
+
+Platform wrappers may adapt:
+
+- invocation command and flags
+- prompt transport (`stdin`, argument, or PTY)
+- approval handling and setup notes
+
+Platform wrappers MUST preserve:
+
+- contract field names and sentinel strings
+- parser behavior
+- PBH defaults and convergence rules
+- state transitions and resume semantics
+
+Platform wrappers MUST NOT redefine architecture, contracts, or healing policy.
+
+---
+
+## Workflow
+
+### Workflow
+
+1. Define the unit of work (component, story, work package, ticket, file).
+2. Create the manifest (`manifest.v2` JSON).
+3. Write shared context and per-task prompts.
+4. Define the completion contract in the prompt (instruct the worker to emit `<<<TASK_RESULT_V2>>>`).
+5. Choose the CLI adapter (`agent`, `opencode`, `claude`).
+6. Build the orchestrator (use `templates/` as starting point).
+7. Run sequential first, add concurrency after contracts and parsing are stable.
+8. Add verification gates (build, test, lint, smoke).
+9. Add healing only after the base loop works (`--heal auto`).
+10. Resume with `--resume` after interruptions.
