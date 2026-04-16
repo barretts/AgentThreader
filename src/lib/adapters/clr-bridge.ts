@@ -332,9 +332,7 @@ export class ClrCliAdapter implements CliAdapter {
         [
           "cli-runner-learner is not installed or failed to load.",
           "Install it as a peer dependency:",
-          "  npm install cli-runner-learner                     (once published)",
-          "  npm install file:../cli-runner-learner             (local checkout)",
-          "  npm link cli-runner-learner                        (dev linkage)",
+          "  npm install cli-runner-learner",
           `Underlying error: ${msg}`,
         ].join("\n"),
       );

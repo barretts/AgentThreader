@@ -14,9 +14,7 @@
  * the interface; delete it or keep it as a reference.
  *
  * To install CLR (optional peer dependency):
- *   npm install cli-runner-learner                     (once published)
- *   npm install file:../cli-runner-learner             (local checkout)
- *   npm link cli-runner-learner                        (dev linkage)
+ *   npm install cli-runner-learner
  */
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
