@@ -1,0 +1,24 @@
+{
+  "name": "my-orchestrator",
+  "version": "0.1.0",
+  "description": "AgentThreader orchestrator boilerplate",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/orchestrator.ts",
+    "kill": "tsx src/orchestrator.ts --kill",
+    "reset": "tsx src/orchestrator.ts --reset-failed",
+    "status": "npx agent-threader status state/state.json",
+    "test": "node --test test/**/*.test.mjs"
+  },
+  "dependencies": {
+    "agent-threader": "^2.0.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

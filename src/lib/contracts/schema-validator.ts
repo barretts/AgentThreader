@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
-import Ajv, { type ValidateFunction, type ErrorObject } from "ajv";
+import type { ValidateFunction, ErrorObject } from "ajv";
+
+// Ajv is CJS-first; createRequire avoids ESM default-export interop issues
+// across all moduleResolution settings (bundler, NodeNext, etc.).
+const require = createRequire(import.meta.url);
+const Ajv = require("ajv") as typeof import("ajv").default;
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 
@@ -34,8 +40,9 @@ function getValidator(schemaFile: string): ValidateFunction {
   const raw = readFileSync(schemaPath, "utf8");
   const schema = JSON.parse(raw);
 
-  // Strip $schema and $id -- default Ajv does not support draft-2020-12
-  // meta-schema, and $id causes collision errors on repeated loads.
+  // Strip $id to avoid collision errors on repeated loads. $schema was
+  // removed from source files (see lessons/ajv-schema-dialect-mismatch-medium.md)
+  // but we still strip defensively in case external schemas carry it.
   delete schema.$schema;
   delete schema.$id;
 

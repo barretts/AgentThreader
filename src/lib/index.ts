@@ -66,6 +66,9 @@ export type { ParseHealOptions, ParseHealResult } from './parser/parse-heal.js';
 export { runDoctor } from './diagnostics/doctor.js';
 export type { DoctorOptions, DoctorResult, DoctorCheck, DoctorStatus } from './diagnostics/doctor.js';
 
+export { extractDiagnosticLines } from './diagnostics/extract-diagnostics.js';
+export type { DiagnosticExtraction } from './diagnostics/extract-diagnostics.js';
+
 // ─── Orchestrator Primitives ─────────────────────────────────────────────────
 export {
   buildDependencyOrder, getReadyTasks, isTerminalStatus, isRunComplete,
@@ -81,3 +84,32 @@ export type {
   ShouldHealResult, ConvergenceResult, EscalationResult, RunAbortResult,
   PatchValidationResult, WriteSafetyOptions, WriteSafetyResult,
 } from './orchestrator/index.js';
+
+export { runPool, CheckpointMutex } from './orchestrator/concurrency.js';
+export { killOrphanedProcesses } from './orchestrator/kill.js';
+export type { KillResult } from './orchestrator/kill.js';
+
+// ─── Terminal Utilities ──────────────────────────────────────────────────────
+export { stripTermEscapes, hasVisibleContent } from './term-utils.js';
+
+// ─── Sentinel Sanitization ───────────────────────────────────────────────────
+export { sanitizeSentinels, sanitizeAndTruncate } from './parser/sentinel-sanitize.js';
+
+// ─── State Reconciliation ────────────────────────────────────────────────────
+export { reconcileState, resetForRetry } from './state/reconcile.js';
+export type { ReconcileResult } from './state/reconcile.js';
+
+// ─── Lockfile ────────────────────────────────────────────────────────────────
+export { acquireLock, forceAcquireLock, releaseLock } from './state/lockfile.js';
+export type { LockfileResult } from './state/lockfile.js';
+
+// ─── Adapter Presets ────────────────────────────────────────────────────────
+export {
+  CLAUDE_PRESET, CRUSH_PRESET, CURSOR_PRESET,
+  ADAPTER_PRESETS, getAdapterPreset, listAdapterPresets, buildArgv,
+} from './adapters/presets.js';
+export type { AdapterPreset } from './adapters/presets.js';
+
+// ─── Scaffold ───────────────────────────────────────────────────────────────
+export { scaffold } from './scaffold/scaffold.js';
+export type { ScaffoldOptions, ScaffoldResult } from './scaffold/scaffold.js';

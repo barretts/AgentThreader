@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "heal_decision.v2.json",
   "title": "Heal Decision v2",
   "description": "Healer output contract. Emitted inside <<<HEAL_DECISION_V2>>> fences.",
