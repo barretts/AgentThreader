@@ -5,6 +5,7 @@ A ready-to-run template for building a manifest-driven agentic orchestrator usin
 ## What This Gives You
 
 - A complete orchestrator that schedules tasks, executes them via CLI adapters, verifies results, and self-heals
+- **Optional cli-runner-learner integration** via `createClrAdapter({ presetId: "crush" })` -- delegates PTY interaction, prompting, and output parsing to a learned profile. New CLI-behavior findings propagate via a CLR version bump, with no changes to this orchestrator.
 - Parallel execution with bounded concurrency and serialized checkpoints
 - State reconciliation on startup (recovers from crashes, zombie processes, stale batch indices)
 - Process lockfile to prevent concurrent orchestrator instances from corrupting state
