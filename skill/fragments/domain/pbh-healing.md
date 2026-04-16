@@ -38,6 +38,10 @@ Non-healable: `blocked_external`, `real_bug`.
 
 `build_error`, `test_error`, `smoke_error` may be healable when evidence points to prompt or configuration rather than a genuine product defect.
 
+### Red-Test False Failure Pattern
+
+When verification uses a red/green test suite pattern (see Verification and Safety Model), a red-test failure can produce a `smoke_error` failure class even though the green tests pass and the patch is correct. The healer SHOULD recognize this pattern: if the verifier log shows all green tests passing and only red tests failing, the failure is a false positive. The correct response is to refine the red test or accept the result, not to retry the patch.
+
 ### Convergence
 
 Healing converges when at least one of: total failing count drops, repeated signature count drops, or a broad failure class narrows to a local issue. Healing is non-convergent when the same set persists, same signatures repeat, or budget is exhausted.

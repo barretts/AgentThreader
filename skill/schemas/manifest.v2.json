@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "manifest.v2.json",
   "title": "AgentThreader Manifest v2",
   "description": "Declares the set of tasks, their dependencies, timeouts, and verification profiles for a runner invocation.",

@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "task_result.v2.json",
   "title": "Task Result v2",
   "description": "Worker output contract. Emitted inside <<<TASK_RESULT_V2>>> fences.",

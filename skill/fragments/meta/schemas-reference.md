@@ -1,6 +1,6 @@
 ### Schemas
 
-Machine-readable JSON schemas (JSON Schema 2020-12) live in `schemas/`:
+Machine-readable JSON schemas live in `schemas/`. The `$schema` meta-schema declaration is intentionally omitted -- default Ajv (draft-07) does not resolve draft-2020-12, and none of these schemas use 2020-12-specific features:
 
 | Schema | Contract |
 | --- | --- |

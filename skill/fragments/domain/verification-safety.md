@@ -28,6 +28,30 @@ Verification always belongs to the orchestrator. It runs after successful parse 
 - Backup before write.
 - Rollback on verification failure.
 
+### Red/Green Test Suite Classification
+
+When a verification gate runs tests that contain both "red" suites (demonstrating a vulnerability or bug exists) and "green" suites (proving the fix works), the verifier MUST distinguish between them:
+
+- Suite name containing `"without patch"` = red test: failures are acceptable
+- Suite name containing `"with patch"` = green test: failures are mandatory pass
+
+If exit code is non-zero but all failures are in red suites and at least one green test passed, verification SHOULD pass. If any green test fails, verification MUST fail with specific test names reported.
+
+Worker prompts SHOULD enforce a naming convention:
+
+```javascript
+describe('TASK-ID - without patch (vulnerability exists)', () => { ... });
+describe('TASK-ID - with patch (vulnerability fixed)', () => { ... });
+```
+
+This pattern is especially important for security exploit testing, where red tests are best-effort vulnerability demos that may be fragile, version-dependent, or environment-specific. Only the green tests (proof of fix) should gate verification.
+
+### Self-Contained Output Directories
+
+When the worker produces output in a patch or task directory, that directory MUST be independently runnable. Each output directory SHOULD include a `package.json` declaring its dependencies so that the verifier can install them before running tests.
+
+The verification gate SHOULD auto-detect a `package.json` in the output directory and run `npm install --no-audit --no-fund` before executing tests. If `node_modules` already exists, the install step SHOULD be skipped.
+
 ### Healer Patch Safety
 
 Healer patches follow the same validation model. The healer is forbidden from editing product source files directly, disabling verification, bypassing protected-file rules, or changing healing schedule mid-run.
