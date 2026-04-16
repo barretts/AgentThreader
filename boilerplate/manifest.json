@@ -1,0 +1,39 @@
+{
+  "manifest_version": "2.0",
+  "run_id": "example-run-001",
+  "tasks": [
+    {
+      "id": "task-setup",
+      "prompt_ref": "prompts/task.md",
+      "depends_on": [],
+      "timeout_sec": 300,
+      "verify_profile": "default",
+      "priority": 1,
+      "metadata": {
+        "description": "Set up the project environment"
+      }
+    },
+    {
+      "id": "task-implement",
+      "prompt_ref": "prompts/task.md",
+      "depends_on": ["task-setup"],
+      "timeout_sec": 600,
+      "verify_profile": "default",
+      "priority": 2,
+      "metadata": {
+        "description": "Implement the main feature"
+      }
+    },
+    {
+      "id": "task-test",
+      "prompt_ref": "prompts/task.md",
+      "depends_on": ["task-implement"],
+      "timeout_sec": 300,
+      "verify_profile": "default",
+      "priority": 3,
+      "metadata": {
+        "description": "Write and run tests"
+      }
+    }
+  ]
+}

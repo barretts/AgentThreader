@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "state.v2.json",
   "title": "Run State v2",
   "description": "Persistent orchestrator state for resume, convergence tracking, and reporting.",
@@ -85,6 +84,11 @@
         "signature_repeat_limit": {
           "type": "number",
           "minimum": 1
+        },
+        "concurrency": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Concurrency level for parallel task execution. 0 = use manifest policy."
         }
       },
       "additionalProperties": false
@@ -109,6 +113,10 @@
         "healer_attempts": { "type": "number", "minimum": 0 },
         "last_failure_class": { "type": ["string", "null"] },
         "last_failure_signature": { "type": ["string", "null"] },
+        "last_log_tail": {
+          "type": ["string", "null"],
+          "description": "Extracted diagnostic lines from the last execution for healer visibility."
+        },
         "applied_patch_ids": {
           "type": "array",
           "items": { "type": "string" }

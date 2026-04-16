@@ -9,6 +9,8 @@ export interface PreparedInvocation {
   env?: Record<string, string>;
   stdin?: string | null;
   timeoutSec: number;
+  /** Whether this invocation is task-scoped (sandboxed) or project-scoped (full context). */
+  scope?: "task" | "project";
 }
 
 export interface ExecutionArtifact {
@@ -16,6 +18,10 @@ export interface ExecutionArtifact {
   exitCode: number | null;
   startedAt: string;
   finishedAt: string;
+  /** Extracted diagnostic lines from raw output for healer visibility. */
+  lastLogTail?: string;
+  /** Duration in milliseconds. */
+  durationMs?: number;
 }
 
 export interface AdapterHealth {
@@ -41,6 +47,19 @@ export interface CliAdapter {
   };
   prepare(task: ManifestTaskV2, ctx: RunContext): PreparedInvocation;
   execute(
+    invocation: PreparedInvocation,
+    ctx: RunContext,
+  ): Promise<ExecutionArtifact>;
+  /**
+   * Single-prompt execution path for healer and diagnostic invocations.
+   * Must NOT go through the multi-step pipeline -- the healer needs
+   * project-wide context, not a task sandbox.
+   *
+   * Lesson: crush-pipeline-four-output-bugs-high (issue 3)
+   * Lesson: healer-cwd-wrong-directory-medium
+   */
+  executeSingle?(
+    prompt: string,
     invocation: PreparedInvocation,
     ctx: RunContext,
   ): Promise<ExecutionArtifact>;

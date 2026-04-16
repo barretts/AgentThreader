@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "verify_profile.v2.json",
   "title": "AgentThreader v2 Verification Profile Registry",
   "description": "Operator-defined verification profiles resolved by the orchestrator.",

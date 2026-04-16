@@ -22,6 +22,7 @@ function makeTaskState(
     healer_attempts: 0,
     last_failure_class: failureClass,
     last_failure_signature: failureSignature,
+    last_log_tail: null,
     applied_patch_ids: [],
     history: [],
   };

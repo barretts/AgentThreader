@@ -120,6 +120,7 @@ bash install-local.sh    # Build, compile, link CLI, and install skills locally
 ## CLI Commands
 
 ```bash
+agent-threader scaffold <target-dir>      # Alias: new    -- scaffold a new orchestrator project
 agent-threader validate-manifest <path>   # Alias: validate
 agent-threader init-state <manifest-path> # Alias: init
 agent-threader parse-result <log-path>    # Alias: parse
