@@ -14,7 +14,7 @@
     "agent-threader": "^2.0.8"
   },
   "peerDependencies": {
-    "cli-runner-learner": "*"
+    "cli-runner-learner": "^0.2.3"
   },
   "peerDependenciesMeta": {
     "cli-runner-learner": {
