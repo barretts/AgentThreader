@@ -110,6 +110,13 @@ export {
 } from './adapters/presets.js';
 export type { AdapterPreset } from './adapters/presets.js';
 
+// ─── CLR Bridge Adapter ─────────────────────────────────────────────────────
+// Thin bridge that delegates CLI interaction to `cli-runner-learner`.
+// CLR is an OPTIONAL peer dependency; if not installed, only the bridge
+// constructor works -- calling any method throws an actionable error.
+export { createClrAdapter, ClrCliAdapter } from './adapters/clr-bridge.js';
+export type { CreateClrAdapterOptions } from './adapters/clr-bridge.js';
+
 // ─── Scaffold ───────────────────────────────────────────────────────────────
 export { scaffold } from './scaffold/scaffold.js';
 export type { ScaffoldOptions, ScaffoldResult } from './scaffold/scaffold.js';
