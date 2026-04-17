@@ -1,13 +1,22 @@
 /**
- * Example CLI adapter. Replace with your actual agent CLI integration.
+ * CLI adapter for this orchestrator.
  *
- * Key lessons applied:
- *  - crush-cwd-scoped-to-patch-dir: task cwd is sandboxed, healer cwd is project root
- *  - crush-prompt-not-from-stdin: pass prompt as positional arg, not stdin
- *  - crush-yolo-flag-not-on-run: test exact invocation manually before wiring
- *  - crush-debug-flag-gives-thinking: use max verbosity to capture tool calls
- *  - healer-cwd-wrong-directory: executeSingle uses project root, not task sandbox
- *  - pty-debug-mode-for-tui-agents: pipe mode vs PTY mode output differences
+ * RECOMMENDED PATH: `createClrAdapter` below delegates PTY interaction,
+ * state-machine-driven prompting, and output parsing to the
+ * `cli-runner-learner` package. All learned lessons (crush prompt
+ * delivery, cwd scoping, yolo-flag traps, thinking indicators, sentinel
+ * poisoning) ship inside the CLR profile + the AT preset. New findings
+ * arrive via a CLR version bump; this file does not change.
+ *
+ * FALLBACK PATH: if you need bespoke behavior -- custom logging, a
+ * non-CLR runtime, or a CLI that CLR doesn't yet have a profile for --
+ * implement `CliAdapter` yourself. The `MyAdapter` class below shows
+ * the interface; delete it or keep it as a reference.
+ *
+ * To install CLR (optional peer dependency):
+ *   npm install cli-runner-learner                     (once published)
+ *   npm install file:../cli-runner-learner             (local checkout)
+ *   npm link cli-runner-learner                        (dev linkage)
  */
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -22,7 +31,24 @@ import {
   stripTermEscapes, hasVisibleContent,
   extractDiagnosticLines,
   sanitizeSentinels,
+  createClrAdapter,
 } from "agent-threader";
+
+// ─── Recommended: delegate to cli-runner-learner ────────────────────────────
+//
+// Pick a preset (claude | crush | cursor) that matches your target CLI.
+// Override `profileId` if you've learned a custom profile via
+// `clr learn --tool <id>`. Override `buildPrompt` to pull from your own
+// prompt files, task metadata, or shared-context registry.
+export const adapter: CliAdapter = createClrAdapter({
+  presetId: "crush",
+  // profileId: "my-custom-tool",
+  // buildPrompt: (task, ctx) => readFileSync(path.join(ctx.repoRoot, task.prompt_ref), "utf8"),
+});
+
+// ─── Fallback example: hand-rolled CliAdapter ───────────────────────────────
+//
+// Keep for reference, or delete if you're going all-in on CLR.
 
 export class MyAdapter implements CliAdapter {
   id = "my-agent";
