@@ -50,10 +50,10 @@
     "eslint": "^9.0.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^3.1.0",
-    "cli-runner-learner": "file:../cli-runner-learner"
+    "cli-runner-learner": "^0.2.3"
   },
   "peerDependencies": {
-    "cli-runner-learner": "*"
+    "cli-runner-learner": "^0.2.3"
   },
   "peerDependenciesMeta": {
     "cli-runner-learner": {
