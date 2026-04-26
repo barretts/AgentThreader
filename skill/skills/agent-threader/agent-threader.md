@@ -56,6 +56,12 @@ Matching requests include:
 
 ---
 
+## Run Identity Markers
+
+{{include:domain/run-identity.md}}
+
+---
+
 ## Normative Specification
 
 The full architecture, contracts, schemas, and behavioral rules are defined in `SPEC.md`. That document is the single source of truth. Read it when you need the end-to-end control flow, complete schema field definitions, or edge-case behavioral rules.

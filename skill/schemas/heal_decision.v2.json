@@ -20,8 +20,8 @@
     },
     "failure_class": {
       "type": "string",
-      "minLength": 1,
-      "description": "Normalized failure class the healer is addressing."
+      "pattern": "^(prompt_gap|missing_paths|weak_contract|contract_error|output_format|timeout|transient_infra(:[a-z_]+)?|blocked_external|real_bug|build_error|test_error|smoke_error)$",
+      "description": "Normalized failure class the healer is addressing. Bare classes plus colon-notation subtypes (e.g. transient_infra:api_auth_blocked) are accepted; subtypes route healer behavior per the Healing Model taxonomy."
     },
     "root_cause": {
       "type": "string",

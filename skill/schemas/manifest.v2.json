@@ -63,6 +63,10 @@
           "description": "Lower number means earlier scheduling within the same dependency depth."
         },
         "retry_policy": { "$ref": "#/$defs/retry_policy" },
+        "resource_lock": {
+          "type": ["string", "null"],
+          "description": "Mutex key. Tasks sharing a resource_lock value serialize on an in-process mutex; tasks with different values (or null) are unconstrained beyond policy.concurrency. Unlike depends_on, resource_lock does NOT propagate state -- a FAILED or BLOCKED predecessor releases its lock so the next holder can run. Use for shared-resource serialization (workdir, file, external system); use depends_on for genuine output dependencies."
+        },
         "metadata": {
           "type": "object",
           "description": "Arbitrary task metadata for reporting or filtering."

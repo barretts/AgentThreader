@@ -22,6 +22,16 @@ export interface ManifestTaskV2 {
   context_refs?: string[];
   priority?: number;
   retry_policy?: RetryPolicy;
+  /**
+   * Mutex key. Tasks sharing a `resource_lock` value serialize on an
+   * in-process mutex (`withResourceLock`); tasks with different values (or
+   * `null`) are unconstrained beyond `policy.concurrency`. Unlike
+   * `depends_on`, `resource_lock` does NOT propagate state -- a FAILED or
+   * BLOCKED predecessor releases its lock so the next holder can run.
+   * Use for shared-resource serialization (workdir, file, external system);
+   * use `depends_on` for genuine output dependencies.
+   */
+  resource_lock?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -112,8 +122,30 @@ export interface StateV2 {
   abort_reason: string | null;
   manifest_digest: string;
   policy: RunPolicy;
+  /**
+   * CLI flags / mode that produced the prior manifest. Optional, but
+   * RECOMMENDED for orchestrators that support `--resume`. The resume
+   * mode-flag check requires either a missing `invocation` (legacy state)
+   * or a matching `argv_digest` between the prior run and the current
+   * invocation; otherwise resume MUST fail loudly to prevent merging a
+   * fresh manifest of a different mode into the prior state.
+   */
+  invocation?: InvocationRecord;
   tasks: Record<string, TaskState>;
   healing_rounds: HealingRound[];
+}
+
+export interface InvocationRecord {
+  /** Top-level orchestrator phase (e.g. "babysit", "review"). */
+  phase: string;
+  /** Manifest-builder mode within the phase (e.g. "vuln-targeted"). */
+  mode: string;
+  /** Mode-affecting CLI flags as parsed (booleans, csv lists, etc.). */
+  flags?: Record<string, unknown>;
+  /** Canonical hash of sorted-flags + sorted-targets. Stable across functionally-equivalent invocations. */
+  argv_digest: string;
+  /** Optional convenience copy of the top-level manifest_digest at invocation time. */
+  manifest_digest?: string;
 }
 
 export interface RunPolicy {
@@ -172,11 +204,25 @@ export interface HealingRound {
 // ─── Adapter Interface ───────────────────────────────────────────────────────
 
 export type ParserErrorCode =
-  | "NO_SENTINEL"
-  | "INVALID_JSON"
+  | "NO_OUTPUT"            // Worker emitted empty / very short output (likely transient_infra)
+  | "NO_SENTINEL"          // Output present but missing TASK_RESULT_V2 sentinels
+  | "INVALID_JSON"         // Sentinels present, JSON malformed
   | "SCHEMA_VIOLATION"
   | "MISSING_REQUIRED_FIELD"
   | "UNSUPPORTED_VERSION";
+
+/**
+ * Discriminated kind for `ParserFailure`. Distinguishes "the worker
+ * exited with little/no output" (likely a transient infra problem) from
+ * "the worker spoke at length but forgot the sentinel block" (likely a
+ * prompt-shape issue). The orchestrator routes these to different
+ * `failure_class` values for healer routing.
+ */
+export type ParserFailureKind =
+  | "no_output"
+  | "no_sentinel"
+  | "json_invalid"
+  | "schema_violation";
 
 export interface PreparedInvocation {
   cwd: string;
@@ -196,7 +242,18 @@ export interface ExecutionArtifact {
 export interface ParserFailure {
   ok: false;
   code: ParserErrorCode;
+  /**
+   * Discriminated kind for routing healer behavior. `no_output` should map
+   * to `transient_infra` (worker likely couldn't produce work);
+   * `no_sentinel` to `contract_error`; `json_invalid` to `output_format`;
+   * `schema_violation` to `weak_contract`.
+   */
+  kind: ParserFailureKind;
   message: string;
+  /** Length of the raw worker output (for diagnostics). */
+  rawLength?: number;
+  /** Up to ~200 chars of the worker output for log surfacing. */
+  sample?: string;
 }
 
 export interface AdapterHealth {
@@ -234,6 +291,13 @@ export interface CliAdapter {
 
 // ─── Failure Classification ──────────────────────────────────────────────────
 
+/**
+ * Bare failure classes. `transient_infra` and the conditional classes
+ * (`build_error`, `test_error`, `smoke_error`) MAY be further qualified
+ * with a colon-notation subtype (e.g. `transient_infra:api_auth_blocked`).
+ * See `FailureClassWithSubtype` and the Healing Model section of the
+ * skill spec for the full taxonomy.
+ */
 export type FailureClass =
   | "prompt_gap"
   | "missing_paths"
@@ -249,6 +313,24 @@ export type FailureClass =
   | "real_bug"
   | "unknown";
 
+/**
+ * Recommended subtypes for `transient_infra`. Routes healer behavior:
+ *  - `api_auth_blocked`, `tool_unavailable`: non-healable, fatal-transient short-circuit
+ *  - `api_rate_limited`, `network_timeout`: retry with backoff
+ *  - `node_version_missing` (and analogous): runtime patch widening prewarm + retry
+ */
+export type TransientInfraSubtype =
+  | "api_auth_blocked"
+  | "api_rate_limited"
+  | "tool_unavailable"
+  | "node_version_missing"
+  | "network_timeout";
+
+export type TransientInfraClass = "transient_infra" | `transient_infra:${TransientInfraSubtype}`;
+
+/** Full failure class union including supported subtypes via colon notation. */
+export type FailureClassWithSubtype = FailureClass | TransientInfraClass;
+
 export const HEALABLE_FAILURE_CLASSES: ReadonlySet<string> = new Set([
   "prompt_gap",
   "missing_paths",
@@ -257,12 +339,29 @@ export const HEALABLE_FAILURE_CLASSES: ReadonlySet<string> = new Set([
   "output_format",
   "timeout",
   "transient_infra",
+  "transient_infra:api_rate_limited",
+  "transient_infra:network_timeout",
+  "transient_infra:node_version_missing",
 ]);
 
 export const NON_HEALABLE_FAILURE_CLASSES: ReadonlySet<string> = new Set([
   "blocked_external",
   "real_bug",
 ]);
+
+/**
+ * Subtypes that MUST short-circuit the run (fatal-transient). PBH MUST NOT
+ * consume heal rounds against these; the orchestrator aborts with
+ * `run_status: ABORTED` and an operator-actionable `abort_reason`.
+ */
+export const FATAL_TRANSIENT_INFRA_SUBTYPES: ReadonlySet<string> = new Set([
+  "transient_infra:api_auth_blocked",
+  "transient_infra:tool_unavailable",
+]);
+
+export function isFatalTransient(failureClass: string | null | undefined): boolean {
+  return failureClass != null && FATAL_TRANSIENT_INFRA_SUBTYPES.has(failureClass);
+}
 
 // ─── PBH Fibonacci Sequence ─────────────────────────────────────────────────
 

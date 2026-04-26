@@ -52,6 +52,28 @@ When the worker produces output in a patch or task directory, that directory MUS
 
 The verification gate SHOULD auto-detect a `package.json` in the output directory and run `npm install --no-audit --no-fund` before executing tests. If `node_modules` already exists, the install step SHOULD be skipped.
 
+### Worker Output Post-Processing
+
+When the worker emits content that consumers parse for stable identifiers (PR markers, sigs, file headers, comment metadata), the orchestrator MUST own the canonical form of those identifiers. Treat worker output as advisory; rewrite to canonical form post-verify.
+
+**Why:** workers drift. The same prompt applied across many runs produces visibly different formattings of "the same" identifier block. Stable parsing downstream requires deterministic canonical form. Empirical example: a single rebody prompt applied to 7 PRs produced 7 different signature-footer shapes (some `<sub>`-wrapped, some plain prose, some missing the hash entirely, some with model-invented hash values).
+
+**Pattern:**
+
+1. Worker emits the artifact (PR body, comment, file content) including its best-effort version of the canonical block (or omitting it entirely).
+2. Orchestrator's verify gate accepts the artifact's content correctness.
+3. AFTER verify, the orchestrator applies a post-processor that:
+   - Strips any improvised version of the canonical block (regex-driven cleanup).
+   - Re-injects the canonical version computed in-process from run identity / project constants.
+   - Is idempotent: running multiple times on the same input produces the same output.
+4. Orchestrator commits the post-processed artifact (e.g. `gh pr edit --body-file`).
+
+**Required:** post-processors must be idempotent and must not change content semantics. They are formatting-only.
+
+**Forbidden:** the worker MUST NOT be the source of truth for cross-run identifiers. Workers may provide a placeholder or omit the block entirely; the orchestrator fills it in. See "Run Identity Markers" for the canonical three-tier identity pattern (visible header + HTML-comment marker + paired-hash sig footer).
+
+`templates/orchestrator.ts` ships a `postProcessArtifact(ref, identity, processor)` helper for the strip-then-canonicalize pattern.
+
 ### Healer Patch Safety
 
 Healer patches follow the same validation model. The healer is forbidden from editing product source files directly, disabling verification, bypassing protected-file rules, or changing healing schedule mid-run.

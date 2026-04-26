@@ -24,17 +24,36 @@ PBH is the default healing strategy. It starts with a small healing window, grow
 
 ### PBH Behavior
 
+- **Fatal-transient short-circuit** (checked FIRST): any task in the window with a `failure_class` subtype tagged non-healable (e.g. `transient_infra:api_auth_blocked`, `transient_infra:tool_unavailable`) immediately aborts the run with `run_status: ABORTED`. The standard convergence rules below are NOT applied; no heal rounds are consumed. The operator must resolve the upstream condition and `--resume`. The orchestrator SHOULD print a prominent `abort_reason` message naming the affected tasks and the recommended resolution.
 - Zero failures in a window: advance to the next larger batch size.
 - Failure rate > 0 but <= threshold: run healer once, retry the same window.
 - Failure rate > threshold: shrink one batch level, isolate repeated signatures.
 - Same signature repeats after healing: escalate that task.
 - No convergence (failing set unchanged across rounds): abort the run.
 
-### Healable vs Non-Healable
+### Failure Class Taxonomy
 
-Healable: `prompt_gap`, `missing_paths`, `weak_contract`, `contract_error`, `output_format`, `timeout`, `transient_infra`.
+| Class | Subtypes (optional) | Healable? | Healer response |
+|---|---|---|---|
+| `prompt_gap` | -- | yes | patch `task_prompt` |
+| `missing_paths` | -- | yes | patch `shared_context` paths |
+| `weak_contract` | -- | yes | patch `contract_hint` |
+| `contract_error` | -- | yes | patch `task_prompt` (sentinel reminder) |
+| `output_format` | -- | yes | patch with stricter formatting guidance |
+| `timeout` | -- | yes | runtime patch raising `timeout_sec` |
+| `transient_infra` | `api_auth_blocked` | **no** | escalate to operator (run aborts via fatal-transient short-circuit) |
+| | `api_rate_limited` | yes | retry with backoff |
+| | `tool_unavailable` | **no** | escalate (operator must install missing dependency) |
+| | `node_version_missing` | yes | runtime patch widening prewarm set + retry |
+| | `network_timeout` | yes | retry with backoff |
+| | (bare, no subtype) | yes | retry within budget |
+| `blocked_external` | -- | no | escalate |
+| `real_bug` | -- | no | escalate |
+| `build_error` | -- | conditional | heal if evidence is prompt/config; escalate if product defect |
+| `test_error` | -- | conditional | same |
+| `smoke_error` | -- | conditional | same; honor red/green test classification |
 
-Non-healable: `blocked_external`, `real_bug`.
+The subtype convention uses colon notation: `failure_class:subtype` (e.g. `transient_infra:api_auth_blocked`). `generateFailureSignature` already produces this shape; `failure_class` values in `task_result.v2` and `heal_decision.v2` MAY use it. Bare class strings remain valid as a catch-all.
 
 `build_error`, `test_error`, `smoke_error` may be healable when evidence points to prompt or configuration rather than a genuine product defect.
 

@@ -27,6 +27,7 @@
       "description": "Hash of the normalized manifest used for resume validation."
     },
     "policy": { "$ref": "#/$defs/policy" },
+    "invocation": { "$ref": "#/$defs/invocation" },
     "tasks": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/task_state" },
@@ -39,6 +40,38 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "invocation": {
+      "type": "object",
+      "required": ["phase", "mode", "argv_digest"],
+      "description": "CLI flags / mode that produced the prior manifest. --resume requires either no flag (preserves prior mode) or matching flag, otherwise fails loudly. Distinct from manifest_digest (which reconciles content drift within a mode).",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Top-level orchestrator phase (e.g. babysit, review, discover)."
+        },
+        "mode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Manifest-builder mode within the phase (e.g. vuln-targeted, rebody-existing, tend-pass)."
+        },
+        "flags": {
+          "type": "object",
+          "description": "Mode-affecting CLI flags as parsed (booleans, csv lists, etc.). Used by --resume to detect mismatch.",
+          "additionalProperties": true
+        },
+        "argv_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]+$",
+          "description": "Canonical hash of sorted-flags + sorted-repos. Stable across functionally-equivalent invocations."
+        },
+        "manifest_digest": {
+          "type": "string",
+          "description": "Optional convenience copy of the top-level manifest_digest at invocation time."
+        }
+      },
+      "additionalProperties": false
+    },
     "policy": {
       "type": "object",
       "required": [
