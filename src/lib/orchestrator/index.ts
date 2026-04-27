@@ -10,11 +10,28 @@ export type { BatchDecision } from './batch-strategy.js';
 export {
   isHealableFailure, computeFailureRate, shouldHeal,
   checkConvergence, shouldEscalateTask, shouldAbortRun,
+  checkWindowFatalTransient,
 } from './healing-policy.js';
 export type {
   WindowOutcome, FailureRateResult, HealDecisionInput,
   ShouldHealResult, ConvergenceResult, EscalationResult, RunAbortResult,
+  FatalTransientResult,
 } from './healing-policy.js';
+
+// Multi-pass runner
+export { runManifestToCompletion } from './run-to-completion.js';
+export type {
+  RunToCompletionPolicy, RunToCompletionDeps, RunToCompletionResult,
+} from './run-to-completion.js';
+
+// Toolchain prewarm
+export { prewarmToolchains, dedupeRequirements } from './prewarm.js';
+export type {
+  PrewarmRequirement, PrewarmOutcome, PrewarmResult, PrewarmInstallFn,
+} from './prewarm.js';
+
+// Resource lock (re-exported from concurrency for discoverability)
+export { ResourceLockRegistry, CheckpointMutex, runPool } from './concurrency.js';
 
 // Patch validation
 export { validatePatch, validatePatchSet } from './patch-validation.js';

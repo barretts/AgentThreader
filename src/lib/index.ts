@@ -11,7 +11,11 @@ export type {
   HealDecisionV2, HealPatch, HealRetryPolicy,
   ParserErrorCode, ParserFailure, FailureClass,
 } from './contracts/types.js';
-export { HEALABLE_FAILURE_CLASSES, NON_HEALABLE_FAILURE_CLASSES } from './contracts/types.js';
+export {
+  HEALABLE_FAILURE_CLASSES,
+  NON_HEALABLE_FAILURE_CLASSES,
+  FATAL_TRANSIENT_INFRA_SUBTYPES,
+} from './contracts/types.js';
 
 // ─── State Types ─────────────────────────────────────────────────────────────
 export type {
@@ -75,17 +79,23 @@ export {
   growBatchSize, shrinkBatchSize, computeEffectiveWindowSize,
   isHealableFailure, computeFailureRate, shouldHeal,
   checkConvergence, shouldEscalateTask, shouldAbortRun,
+  checkWindowFatalTransient,
   validatePatch, validatePatchSet,
   validateWrites,
+  runManifestToCompletion,
+  prewarmToolchains, dedupeRequirements,
 } from './orchestrator/index.js';
 export type {
   SchedulingResult, BatchDecision,
   WindowOutcome, FailureRateResult, HealDecisionInput,
   ShouldHealResult, ConvergenceResult, EscalationResult, RunAbortResult,
+  FatalTransientResult,
   PatchValidationResult, WriteSafetyOptions, WriteSafetyResult,
+  RunToCompletionPolicy, RunToCompletionDeps, RunToCompletionResult,
+  PrewarmRequirement, PrewarmOutcome, PrewarmResult, PrewarmInstallFn,
 } from './orchestrator/index.js';
 
-export { runPool, CheckpointMutex } from './orchestrator/concurrency.js';
+export { runPool, CheckpointMutex, ResourceLockRegistry } from './orchestrator/concurrency.js';
 export { killOrphanedProcesses } from './orchestrator/kill.js';
 export type { KillResult } from './orchestrator/kill.js';
 
