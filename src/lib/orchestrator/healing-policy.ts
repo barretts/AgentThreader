@@ -1,5 +1,9 @@
 import type { TaskState, RunPolicy, HealingRound } from "../state/types.js";
-import { HEALABLE_FAILURE_CLASSES, NON_HEALABLE_FAILURE_CLASSES } from "../contracts/types.js";
+import {
+  HEALABLE_FAILURE_CLASSES,
+  NON_HEALABLE_FAILURE_CLASSES,
+  FATAL_TRANSIENT_INFRA_SUBTYPES,
+} from "../contracts/types.js";
 
 export interface WindowOutcome {
   windowTaskIds: string[];
@@ -177,4 +181,52 @@ export function shouldAbortRun(
 export interface RunAbortResult {
   abort: boolean;
   reason: string;
+}
+
+export interface FatalTransientResult {
+  /** True when any window task carries a subtype in the fatal set. */
+  fatal: boolean;
+  /** First matched subtype (e.g. "transient_infra:api_auth_blocked"). */
+  subtype: string | null;
+  /** Task ids whose last failure class matched the fatal set. */
+  taskIds: string[];
+  /** Operator-actionable message for the abort path. */
+  reason: string;
+}
+
+/**
+ * Scan a window for failures tagged with a "fatal transient" infrastructure
+ * subtype (e.g. API auth blocked, tool unavailable). These are static
+ * conditions where PBH retries provably burn budget against a non-recoverable
+ * upstream block. Callers should abort the run rather than enter the normal
+ * heal-shrink-isolate loop, leaving FAILED tasks intact for `--resume` once
+ * the operator resolves the upstream condition.
+ */
+export function checkWindowFatalTransient(
+  outcome: WindowOutcome,
+  fatalSet: ReadonlySet<string> = FATAL_TRANSIENT_INFRA_SUBTYPES,
+): FatalTransientResult {
+  const matched: string[] = [];
+  let firstSubtype: string | null = null;
+
+  for (const taskId of outcome.windowTaskIds) {
+    const ts = outcome.taskStates[taskId];
+    const cls = ts?.last_failure_class;
+    if (!cls) continue;
+    if (fatalSet.has(cls)) {
+      matched.push(taskId);
+      if (firstSubtype === null) firstSubtype = cls;
+    }
+  }
+
+  if (matched.length === 0) {
+    return { fatal: false, subtype: null, taskIds: [], reason: "no fatal transient subtypes in window" };
+  }
+
+  return {
+    fatal: true,
+    subtype: firstSubtype,
+    taskIds: matched,
+    reason: `fatal transient infra detected (${firstSubtype}) on ${matched.length} task(s); operator action required`,
+  };
 }

@@ -37,7 +37,8 @@
     "evidence": { "$ref": "#/$defs/evidence" },
     "failure_class": {
       "type": "string",
-      "description": "Optional worker-supplied hint. The orchestrator still owns final classification."
+      "pattern": "^(prompt_gap|missing_paths|weak_contract|contract_error|output_format|timeout|transient_infra(:[a-z_]+)?|blocked_external|real_bug|build_error|test_error|smoke_error)$",
+      "description": "Optional worker-supplied hint. The orchestrator still owns final classification. Bare classes are valid; subtypes are encoded with colon notation (e.g. transient_infra:api_auth_blocked, transient_infra:node_version_missing) for healer routing. See the Healing Model section of the skill spec for the canonical taxonomy and per-subtype healer responses."
     }
   },
   "additionalProperties": false,

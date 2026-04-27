@@ -63,3 +63,36 @@ export class CheckpointMutex {
     await this.chain;
   }
 }
+
+/**
+ * Per-key FIFO mutex registry for `resource_lock`.
+ *
+ * Tasks carrying the same `resource_lock` serialize on a shared promise chain.
+ * Tasks with different keys (or no key) do not interact with each other and
+ * run under the ambient concurrency pool. Unlike `depends_on`, this primitive
+ * does not propagate outcomes: a FAILED holder still releases its slot so the
+ * next holder runs.
+ */
+export class ResourceLockRegistry {
+  private chains = new Map<string, Promise<unknown>>();
+
+  /**
+   * Acquire the lock for `key`, run `fn`, then release. If `key` is
+   * null/undefined/empty, `fn` runs immediately without locking.
+   */
+  async withLock<T>(key: string | null | undefined, fn: () => Promise<T>): Promise<T> {
+    if (!key) return fn();
+
+    const prior = this.chains.get(key) ?? Promise.resolve();
+    // Swallow prior rejections so one failing holder doesn't poison the chain.
+    const mine = prior.catch(() => undefined).then(fn);
+    this.chains.set(key, mine);
+
+    try {
+      return await mine;
+    } finally {
+      // Garbage-collect the chain slot once we're the current tail.
+      if (this.chains.get(key) === mine) this.chains.delete(key);
+    }
+  }
+}

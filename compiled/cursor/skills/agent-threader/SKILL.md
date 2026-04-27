@@ -35,19 +35,50 @@ The v2 system has five moving parts:
 
 ### Control Flow
 
+The orchestrator drains the manifest in a multi-pass loop. `runPool` handles one batch of currently-ready tasks then returns; the orchestrator MUST wrap it in a loop until `isRunComplete` or no tasks are ready, otherwise only chain heads execute.
+
 ```text
 Manifest
   -> Orchestrator
-    -> Adapter -> Worker
-    -> Parser and Schema Validator
-    -> Verification Gates
-    -> State Checkpoint
-    -> Healer (at batch checkpoints when policy requires)
-      -> Patch Validation and Application
-    -> Resume or Escalate
+    loop until isRunComplete(state):
+      ready = getReadyTasks(manifest, state, depOrder)
+      if ready is empty: break (escalate stalled tasks)
+      runPool(ready, concurrency, async (task) =>
+        Adapter -> Worker
+        Parser and Schema Validator
+        Verification Gates
+        Worker Output Post-Processing (when artifact has cross-run identifiers)
+        State Checkpoint
+      )
+      Healer (at batch checkpoints when policy requires)
+        -> Patch Validation and Application
+    finalize: Resume or Escalate
 ```
 
 Worker and healer outputs are candidate data until the orchestrator validates and commits them to state. Exit code alone is never treated as task success.
+
+The `runManifestToCompletion(manifest, state, policy, workerFn, checkpoint)` helper in `templates/orchestrator.ts` encapsulates the multi-pass loop. Downstream runners SHOULD use it rather than calling `runPool` directly.
+
+### Concurrency Patterns
+
+agent-threader provides two complementary primitives for constraining task execution. Picking the right one matters for throughput on partially-failed manifests.
+
+| Primitive | Semantic | When to use | Failure propagation |
+|---|---|---|---|
+| `depends_on` | Predecessor must be `DONE` before dependent runs | Task B genuinely consumes A's outputs (writes, evidence, etc.) | A's `FAILED`/`BLOCKED` stalls B -- correctly, since B cannot succeed without A |
+| `resource_lock` | At most one task per lock-key runs at a time | Tasks share a mutable resource (workdir, file, external system) but do not consume each other's outputs | Predecessor releases the lock on terminal state; next holder runs regardless of A's outcome |
+
+A task may carry both. `depends_on` gates readiness; `resource_lock` gates execution among ready tasks via an in-process `withResourceLock(key, fn)` helper (see `templates/orchestrator.ts`). Cross-resource tasks remain free to run in parallel up to `policy.concurrency`.
+
+**Anti-pattern:** chaining tasks via `depends_on` purely to serialize on a shared workdir. A `BLOCKED` or `FAILED` predecessor stalls every later task in the chain even though they have no real data dependency. Use `resource_lock` instead. Empirically this difference can be ~9x throughput on the unblocked tail of a stalled chain.
+
+**Resource lock starvation:** the worker pool greedily fills slots from the ready set. If multiple ready tasks share a `resource_lock`, all but one wait while pool slots are wasted. Choose lock keys at the right granularity:
+
+- Too coarse (single `resource_lock="global"`): pool degenerates to single-threaded.
+- Too fine (per-task unique key): no exclusion at all.
+- Right granularity (one key per actual mutable resource): cross-resource concurrency, within-resource serialization. Example: `workdir:cache/<repo-slug>`.
+
+If the manifest is heavily skewed toward a single resource, prefer `depends_on` chains for ordering or split the resource (e.g. per-task workdirs via `git worktree add`).
 
 ### Canonical Source Tree
 
@@ -70,9 +101,11 @@ All public contracts are JSON, versioned (`"2.0"`), and schema-validated. Machin
 
 ### manifest.v2
 
-Declares tasks with required fields: `id`, `prompt_ref`, `depends_on`, `timeout_sec`, `verify_profile`. Optional: `context_refs`, `priority`, `retry_policy`, `metadata`.
+Declares tasks with required fields: `id`, `prompt_ref`, `depends_on`, `timeout_sec`, `verify_profile`. Optional: `context_refs`, `priority`, `retry_policy`, `resource_lock`, `metadata`.
 
 Tasks are topologically sorted by `depends_on`. Lower `priority` values run first. A task cannot start until all dependencies are `DONE`.
+
+`resource_lock` (optional, string) names a mutex key. Tasks sharing a `resource_lock` value serialize on an in-process mutex; tasks with different values (or `null`) are unconstrained beyond `policy.concurrency`. Unlike `depends_on`, `resource_lock` does NOT propagate state -- a `FAILED` or `BLOCKED` predecessor simply releases its lock so the next holder can proceed. Use `resource_lock` for shared-resource serialization (workdir, file, external system) and `depends_on` for genuine output dependencies. See "Concurrency Patterns" in the Architecture section.
 
 ### task_result.v2
 
@@ -81,6 +114,19 @@ Emitted by the worker inside `<<<TASK_RESULT_V2>>>` / `<<<END_TASK_RESULT_V2>>>`
 Required fields: `contract_version`, `task_id`, `status` (DONE | BLOCKED | FAILED | CONTRACT_ERROR), `summary`.
 
 Optional: `changed_files`, `writes[]` (with `path`, `op`, `encoding`, `content` or `content_ref`), `evidence` (commands, log_refs, notes), `failure_class`.
+
+#### Parser failure shape
+
+When parsing the worker's output fails, the parser returns a `ParserFailure` with a `kind` discriminator instead of a single bare error class:
+
+| `kind` | Meaning | Mapped `failure_class` |
+|---|---|---|
+| `no_output` | Worker exited with empty or very short output (below threshold). Typically signals a transient-infra problem (API auth, rate limit, network) rather than a prompt-shape issue. | `transient_infra` (subtype determined from output sample where possible) |
+| `no_sentinel` | Output is substantive but missing the `<<<TASK_RESULT_V2>>>` block. Prompt did not enforce the contract. | `contract_error` |
+| `json_invalid` | Sentinel block found but its body is not valid JSON. Repair (strip code fences, trailing commas) was attempted and failed. | `output_format` |
+| `schema_violation` | JSON parses but does not satisfy `task_result.v2.json`. | `weak_contract` |
+
+Distinguishing these matters: a `no_output` from a 401-blocked worker model is not the same bug as a `no_sentinel` from a worker that forgot the closing block, and the healer should respond differently. See "Healable vs Non-Healable" in the Healing Model.
 
 ### heal_decision.v2
 
@@ -126,17 +172,36 @@ PBH is the default healing strategy. It starts with a small healing window, grow
 
 ### PBH Behavior
 
+- **Fatal-transient short-circuit** (checked FIRST): any task in the window with a `failure_class` subtype tagged non-healable (e.g. `transient_infra:api_auth_blocked`, `transient_infra:tool_unavailable`) immediately aborts the run with `run_status: ABORTED`. The standard convergence rules below are NOT applied; no heal rounds are consumed. The operator must resolve the upstream condition and `--resume`. The orchestrator SHOULD print a prominent `abort_reason` message naming the affected tasks and the recommended resolution.
 - Zero failures in a window: advance to the next larger batch size.
 - Failure rate > 0 but <= threshold: run healer once, retry the same window.
 - Failure rate > threshold: shrink one batch level, isolate repeated signatures.
 - Same signature repeats after healing: escalate that task.
 - No convergence (failing set unchanged across rounds): abort the run.
 
-### Healable vs Non-Healable
+### Failure Class Taxonomy
 
-Healable: `prompt_gap`, `missing_paths`, `weak_contract`, `contract_error`, `output_format`, `timeout`, `transient_infra`.
+| Class | Subtypes (optional) | Healable? | Healer response |
+|---|---|---|---|
+| `prompt_gap` | -- | yes | patch `task_prompt` |
+| `missing_paths` | -- | yes | patch `shared_context` paths |
+| `weak_contract` | -- | yes | patch `contract_hint` |
+| `contract_error` | -- | yes | patch `task_prompt` (sentinel reminder) |
+| `output_format` | -- | yes | patch with stricter formatting guidance |
+| `timeout` | -- | yes | runtime patch raising `timeout_sec` |
+| `transient_infra` | `api_auth_blocked` | **no** | escalate to operator (run aborts via fatal-transient short-circuit) |
+| | `api_rate_limited` | yes | retry with backoff |
+| | `tool_unavailable` | **no** | escalate (operator must install missing dependency) |
+| | `node_version_missing` | yes | runtime patch widening prewarm set + retry |
+| | `network_timeout` | yes | retry with backoff |
+| | (bare, no subtype) | yes | retry within budget |
+| `blocked_external` | -- | no | escalate |
+| `real_bug` | -- | no | escalate |
+| `build_error` | -- | conditional | heal if evidence is prompt/config; escalate if product defect |
+| `test_error` | -- | conditional | same |
+| `smoke_error` | -- | conditional | same; honor red/green test classification |
 
-Non-healable: `blocked_external`, `real_bug`.
+The subtype convention uses colon notation: `failure_class:subtype` (e.g. `transient_infra:api_auth_blocked`). `generateFailureSignature` already produces this shape; `failure_class` values in `task_result.v2` and `heal_decision.v2` MAY use it. Bare class strings remain valid as a catch-all.
 
 `build_error`, `test_error`, `smoke_error` may be healable when evidence points to prompt or configuration rather than a genuine product defect.
 
@@ -210,6 +275,28 @@ When the worker produces output in a patch or task directory, that directory MUS
 
 The verification gate SHOULD auto-detect a `package.json` in the output directory and run `npm install --no-audit --no-fund` before executing tests. If `node_modules` already exists, the install step SHOULD be skipped.
 
+### Worker Output Post-Processing
+
+When the worker emits content that consumers parse for stable identifiers (PR markers, sigs, file headers, comment metadata), the orchestrator MUST own the canonical form of those identifiers. Treat worker output as advisory; rewrite to canonical form post-verify.
+
+**Why:** workers drift. The same prompt applied across many runs produces visibly different formattings of "the same" identifier block. Stable parsing downstream requires deterministic canonical form. Empirical example: a single rebody prompt applied to 7 PRs produced 7 different signature-footer shapes (some `<sub>`-wrapped, some plain prose, some missing the hash entirely, some with model-invented hash values).
+
+**Pattern:**
+
+1. Worker emits the artifact (PR body, comment, file content) including its best-effort version of the canonical block (or omitting it entirely).
+2. Orchestrator's verify gate accepts the artifact's content correctness.
+3. AFTER verify, the orchestrator applies a post-processor that:
+   - Strips any improvised version of the canonical block (regex-driven cleanup).
+   - Re-injects the canonical version computed in-process from run identity / project constants.
+   - Is idempotent: running multiple times on the same input produces the same output.
+4. Orchestrator commits the post-processed artifact (e.g. `gh pr edit --body-file`).
+
+**Required:** post-processors must be idempotent and must not change content semantics. They are formatting-only.
+
+**Forbidden:** the worker MUST NOT be the source of truth for cross-run identifiers. Workers may provide a placeholder or omit the block entirely; the orchestrator fills it in. See "Run Identity Markers" for the canonical three-tier identity pattern (visible header + HTML-comment marker + paired-hash sig footer).
+
+`templates/orchestrator.ts` ships a `postProcessArtifact(ref, identity, processor)` helper for the strip-then-canonicalize pattern.
+
 ### Healer Patch Safety
 
 Healer patches follow the same validation model. The healer is forbidden from editing product source files directly, disabling verification, bypassing protected-file rules, or changing healing schedule mid-run.
@@ -252,6 +339,26 @@ When running a CLI in non-interactive `--print` mode (e.g. Claude CLI), the adap
 - **Permission bypass**: Include `--dangerously-skip-permissions` when running unattended. Without it, blocked permission prompts silently consume turns in print mode.
 - **External directory access**: If the worker needs to operate outside the workspace root (e.g. `/tmp`), add `--add-dir /tmp` to grant explicit access. Without it, file operations outside the workspace are denied even with `--dangerously-skip-permissions`.
 - **Tool restrictions**: Avoid restricting `--allowedTools` unless there is a specific security reason. Restricting tools does not reduce risk in print mode but does increase turn exhaustion by blocking expected operations.
+- **Argv terminator**: when using a variadic flag (e.g. `--add-dir`) before the prompt, place `--` immediately after the last variadic value and before the prompt. Without it, `--add-dir` greedily consumes the prompt as a second directory and Claude exits with the misleading error `Error: Input must be provided either through stdin or as a prompt argument when using --print`. Convention: include `--` before every prompt invocation, even when no variadic flag is present (it is harmless). Concrete shape: `["--add-dir", workDir, "--", prompt]`.
+- **Stdin handling**: in `--print` mode, close stdin explicitly. Spawn Claude with `stdio[0] = "ignore"` (Node `child_process`), or redirect from `/dev/null` (shell). Default piped or inherited stdin causes Claude to block on stdin read until EOF, producing silent multi-minute hangs that are indistinguishable from legitimate long-running tasks. There is no error signal; the only symptom is absence of progress.
+- **Output format**: for unattended runs the adapter MUST use `--output-format stream-json --verbose --include-partial-messages`. Default text mode buffers the entire response until end-of-turn and provides no progress signal -- a productively-running worker is indistinguishable from a hung one. Stream-json emits per-event JSON lines (`system/init`, `assistant/text`, `assistant/tool_use`, `user/tool_result`, `result`) that the orchestrator parses for per-task progress and hang detection. Capture the canonical assistant response from the `result` event's `result` field; concatenating `assistant/text` chunks can produce duplicates under `--include-partial-messages`.
+
+### Worker Environment
+
+Workers run concurrently. Tools that mutate shared user state (toolchain installers, package caches, system-wide config) are unsafe in workers because parallel invocations race. Empirical example: two concurrent `nvm install` calls for different node majors corrupted `~/.nvm/versions/` because both wrote to the alias map and shell init concurrently.
+
+**Pattern: pre-warm-then-use.**
+
+1. The orchestrator inspects all manifest tasks BEFORE starting the worker pool. It enumerates the set of unique toolchain versions / shared resources required.
+2. Sequentially (one at a time) the orchestrator installs/prepares each unique resource, capturing logs.
+3. Worker prompts forbid the install/mutation operation explicitly. Workers may only USE the resource (e.g. `nvm use`, `pyenv shell`).
+4. If a worker's USE call fails because the resource is not pre-warmed, the worker MUST set `failure_class: "transient_infra:<subtype>"` (e.g. `node_version_missing`) and exit. The orchestrator widens its pre-warm set on retry.
+
+**Toolchains affected:** nvm, pyenv, rbenv, sdkman, asdf -- anything that writes to a user-level shared directory. Same pattern for shared package caches, system-wide config, etc.
+
+**Exact-version pins:** when prewarming toolchains, install the EXACT version specified by repo configuration files (`.nvmrc`, `.node-version`, `engines.node`), not just the major. `nvm use 18.14.2` requires `18.14.2` specifically -- `nvm install 18` (latest 18.x) does not satisfy it. Same applies to pyenv/rbenv/sdkman pin files. Surface CONFLICT diagnostics when two sources within a repo disagree (e.g. `.node-version=18.14.2` vs `engines.node=^22.13.1`).
+
+`templates/orchestrator.ts` ships a `prewarmToolchains(requirements)` helper that serializes installs and captures logs. Workers reference this protocol via the prompt's "do not install" hard rule.
 
 ### Temp Directory Cleanup
 
@@ -290,8 +397,45 @@ Mandatory. The orchestrator writes state via a temporary file followed by atomic
 - If `manifest_digest` changes, the orchestrator warns or forces reconciliation.
 - `ESCALATED` tasks are not retried automatically.
 - `FAILED` and `BLOCKED` tasks are eligible only if retry policy allows.
+- **Mode/flag preservation:** `state.v2.invocation` records the CLI flags / mode that produced the prior manifest. `--resume` requires either no mode-affecting flags (orchestrator reads `state.invocation` and reconstructs the prior mode) or matching flags (operator explicitly repeats the prior mode). A flag mismatch that would change the manifest mode (e.g. switching between two manifest builders) FAILS LOUDLY at resume; the operator must either match the prior mode or start a new run. `manifest_digest` continues to reconcile content drift within a mode.
 
 Reconciliation handles: tasks removed since last run, tasks added, tasks whose `prompt_ref`, `depends_on`, or `verify_profile` changed.
+
+`state.v2.invocation` shape:
+
+```jsonc
+{
+  "invocation": {
+    "phase": "<phase-name>",          // e.g. "babysit", "review", "discover"
+    "mode": "<mode-name>",            // e.g. "vuln-targeted", "rebody-existing", "tend-pass"
+    "flags": { /* mode-affecting CLI flags */ },
+    "argv_digest": "sha256:...",      // canonical hash of sorted-flags + sorted-repos
+    "manifest_digest": "sha256:..."
+  }
+}
+```
+
+`--resume` workflow on flag mismatch:
+
+```
+ERROR: Cannot --resume with different invocation flags than the prior run.
+
+Prior run (state.json):  mode=<prior-mode>  flags=<prior-flags>
+Current invocation:      mode=<current-mode>  flags=<current-flags>
+
+To resume the prior run, repeat its mode flags or omit them entirely.
+To start a new run with the current flags, drop --resume (state will be archived first).
+```
+
+### Archival
+
+**Mandate: never delete prior-run artifacts.** At the start of any non-resume run, the orchestrator MUST move prior `state.json`, `manifest.json`, and run identity files into `<state-dir>/archive/<prior_run_id>/` (or a timestamp-tagged directory if the prior `run_id` is unrecoverable) BEFORE overwriting. Use `renameSync` for filesystem atomicity within a mount point; fall back to copy + delete only across mounts.
+
+Worker logs in per-task workdirs that would be wiped by a fresh checkout/clean MUST be relocated under `reports/worker-logs/<task-key>/<timestamp>/` BEFORE the wipe. Workers may write new logs to their workdir's `.logs/` knowing they will be archived.
+
+The archival mandate is non-overridable for normal orchestrator startup. Operator-level "delete archives older than N days" tooling is acceptable as a separate command, not as a normal-run side effect. Forbidden in normal startup: `rm -rf <state-dir>`, `rmSync(<state-dir>, { recursive: true })`, `git clean -fdx` inside a workdir before logs are preserved, truncating worker logs / healing decision logs / per-task per-attempt evidence.
+
+`templates/orchestrator.ts` ships `archivePriorRunArtifacts({ stateDir, archiveSubdir, tag })` for the rename-based pattern.
 
 ### Failure Signature Generation
 
@@ -312,6 +456,51 @@ Per-task: escalate when a task repeats the same signature `signature_repeat_limi
 Per-run: escalate when `max_total_heal_rounds` is exhausted without convergence, or continuing would only repeat the same failure set.
 
 Escalated tasks remain in state for reporting. Aborted runs record `run_status: ABORTED` with a non-empty `abort_reason`.
+
+---
+
+## Run Identity Markers
+
+### Run Identity Markers
+
+When agent-threader produces artifacts that outlive a single run -- pull requests, PR comments, repo files, generated documents -- embed a stable three-tier identity pattern in the artifact body so consumers (humans, parsers, dashboards, future agent runs) can answer "which run produced this?" with a deterministic search.
+
+The orchestrator OWNS this content. Workers MUST NOT generate identity markers from prose; the orchestrator generates them deterministically from run state and either renders them in the prompt for the worker to include verbatim, OR post-processes the artifact (see "Worker Output Post-Processing" in Verification and Safety).
+
+### Three-Tier Identity Pattern
+
+1. **Visible attribution header** at the top of the artifact body. Renders inline in PR/comment UIs; humans see WHO/WHAT produced this.
+
+   ```
+   <persona-icon-and-name> -- **<phase-or-tool-name>** _(AT run `<short_id>`)_
+   ```
+
+2. **HTML-comment recognizer marker** anywhere in the body (typically near the bottom). Hidden from rendered view but parser-recognizable. The canonical signal for cross-run filtering via `gh pr list --search 'in:body "<skill>:v1"'`.
+
+   ```
+   <!-- <skill-name>:<schema-version> run_id=<run_id> short_id=<short_id> -->
+   ```
+
+3. **Paired-hash signature footer** at the bottom. Compact `<sub>...</sub>` line carrying skill-sig (project-level constant) and run-sig (this AT's short_id) for cross-skill attribution.
+
+   ```
+   <sub>skill-sig: `<SKILL_SIG>` &middot; <project>-sig: `<short_id>` &middot; <skill-name> canonical pipeline</sub>
+   ```
+
+### Helpers
+
+`templates/orchestrator.ts` ships:
+
+- `newRunIdentity({ skillName, schemaVersion, persona })` -- generates `{ runId, shortId, marker, visibleHeader }`. `runId` is `<skill-name>-<iso-timestamp>`; `shortId` is the first 8 hex chars of `sha256(runId)`.
+- `canonicalFooter(identity, { skillSig, skillName, identityKey })` -- returns the paired-hash footer + marker as a single string ready to append.
+- `extractRunIdentity(body)` -- parser companion for cross-run queries; returns `{ skillName, schemaVersion, runId, shortId } | null`.
+
+### Anti-Patterns
+
+- Do NOT use prose-only attribution (`Generated by ...`) -- workers drift, consumers cannot parse it consistently.
+- Do NOT use `# <heading>`-style attribution that disrupts artifact structure.
+- Do NOT duplicate `run_id` and `short_id` in multiple places of the body where they could drift between rewrites; pin them in exactly one HTML-comment marker.
+- Do NOT trust the worker to generate the canonical hash values. The skill-sig and run-sig are project-level/orchestrator-level constants; workers do not have authoritative access. Empirical example: a worker generated `skill-sig: ad61853a` while the actual project SKILL_SIG was `26cfcbaf` -- the worker invented the hash. The orchestrator post-processor must overwrite worker-supplied identity blocks with the canonical form.
 
 ---
 

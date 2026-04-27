@@ -17,7 +17,19 @@ import type {
   HealDecisionV2,
   ParserFailure,
   ParserErrorCode,
+  ParserFailureKind,
 } from "./types.js";
+
+/**
+ * Below this many non-whitespace characters in the raw worker output we
+ * treat the result as `no_output` (likely a transient_infra problem --
+ * worker model failed to produce work, e.g. API auth blocked) rather
+ * than `no_sentinel` (worker spoke at length but forgot the contract).
+ * 500 chars is a reasonable default for `claude --print` style workers
+ * that need to emit at least a short answer + the sentinel block.
+ * Adjust per CLI as needed.
+ */
+const NO_OUTPUT_THRESHOLD_CHARS = 500;
 
 // ─── Sentinels ───────────────────────────────────────────────────────────────
 
@@ -56,13 +68,29 @@ export function parseHealDecision(
 export function parseTaskResultFromString(
   raw: string,
 ): TaskResultV2 | ParserFailure {
+  const trimmed = raw.trim();
+  if (trimmed.length < NO_OUTPUT_THRESHOLD_CHARS) {
+    return failKind(
+      "NO_OUTPUT",
+      "no_output",
+      `Worker output is empty or below the no_output threshold (${trimmed.length} chars). Likely cause: transient infra (API auth, rate limit, network) -- not a prompt-shape issue.`,
+      raw.length,
+      raw.slice(0, 200),
+    );
+  }
   const extracted = extractLastFencedBlock(
     raw,
     TASK_RESULT_START,
     TASK_RESULT_END,
   );
   if (!extracted) {
-    return fail("NO_SENTINEL", "No <<<TASK_RESULT_V2>>> block found in output");
+    return failKind(
+      "NO_SENTINEL",
+      "no_sentinel",
+      "No <<<TASK_RESULT_V2>>> block found in output",
+      raw.length,
+      raw.slice(0, 200),
+    );
   }
 
   const repaired = repairJson(extracted);
@@ -71,9 +99,11 @@ export function parseTaskResultFromString(
   try {
     parsed = JSON.parse(repaired);
   } catch (e) {
-    return fail(
+    return failKind(
       "INVALID_JSON",
+      "json_invalid",
       `Invalid JSON in TASK_RESULT_V2 block: ${e instanceof Error ? e.message : String(e)}`,
+      raw.length,
     );
   }
 
@@ -86,15 +116,28 @@ export function parseTaskResultFromString(
 export function parseHealDecisionFromString(
   raw: string,
 ): HealDecisionV2 | ParserFailure {
+  const trimmed = raw.trim();
+  if (trimmed.length < NO_OUTPUT_THRESHOLD_CHARS) {
+    return failKind(
+      "NO_OUTPUT",
+      "no_output",
+      `Healer output is empty or below the no_output threshold (${trimmed.length} chars).`,
+      raw.length,
+      raw.slice(0, 200),
+    );
+  }
   const extracted = extractLastFencedBlock(
     raw,
     HEAL_DECISION_START,
     HEAL_DECISION_END,
   );
   if (!extracted) {
-    return fail(
+    return failKind(
       "NO_SENTINEL",
+      "no_sentinel",
       "No <<<HEAL_DECISION_V2>>> block found in output",
+      raw.length,
+      raw.slice(0, 200),
     );
   }
 
@@ -104,9 +147,11 @@ export function parseHealDecisionFromString(
   try {
     parsed = JSON.parse(repaired);
   } catch (e) {
-    return fail(
+    return failKind(
       "INVALID_JSON",
+      "json_invalid",
       `Invalid JSON in HEAL_DECISION_V2 block: ${e instanceof Error ? e.message : String(e)}`,
+      raw.length,
     );
   }
 
@@ -237,7 +282,7 @@ const VALID_TASK_STATUSES = new Set([
 
 function validateTaskResult(data: unknown): TaskResultV2 | ParserFailure {
   if (typeof data !== "object" || data === null) {
-    return fail("SCHEMA_VIOLATION", "Task result must be a JSON object");
+    return fail("SCHEMA_VIOLATION", "schema_violation", "Task result must be a JSON object");
   }
 
   const obj = data as Record<string, unknown>;
@@ -245,19 +290,21 @@ function validateTaskResult(data: unknown): TaskResultV2 | ParserFailure {
   if (obj.contract_version !== "2.0") {
     return fail(
       "UNSUPPORTED_VERSION",
+      "schema_violation",
       `Expected contract_version "2.0", got "${String(obj.contract_version)}"`,
     );
   }
 
   for (const field of ["task_id", "status", "summary"] as const) {
     if (typeof obj[field] !== "string" || (obj[field] as string).length === 0) {
-      return fail("MISSING_REQUIRED_FIELD", `Missing or empty required field: ${field}`);
+      return fail("MISSING_REQUIRED_FIELD", "schema_violation", `Missing or empty required field: ${field}`);
     }
   }
 
   if (!VALID_TASK_STATUSES.has(obj.status as string)) {
     return fail(
       "SCHEMA_VIOLATION",
+      "schema_violation",
       `Invalid status "${String(obj.status)}". Must be one of: ${[...VALID_TASK_STATUSES].join(", ")}`,
     );
   }
@@ -265,12 +312,13 @@ function validateTaskResult(data: unknown): TaskResultV2 | ParserFailure {
   // Validate writes[] if present
   if (obj.writes !== undefined) {
     if (!Array.isArray(obj.writes)) {
-      return fail("SCHEMA_VIOLATION", "writes must be an array");
+      return fail("SCHEMA_VIOLATION", "schema_violation", "writes must be an array");
     }
     for (const w of obj.writes as Array<Record<string, unknown>>) {
       if (!w.content && !w.content_ref) {
         return fail(
           "SCHEMA_VIOLATION",
+          "schema_violation",
           `Write entry for "${String(w.path)}" must have content or content_ref`,
         );
       }
@@ -285,7 +333,7 @@ const VALID_HEAL_SCOPES = new Set(["task", "batch", "epoch"]);
 
 function validateHealDecision(data: unknown): HealDecisionV2 | ParserFailure {
   if (typeof data !== "object" || data === null) {
-    return fail("SCHEMA_VIOLATION", "Heal decision must be a JSON object");
+    return fail("SCHEMA_VIOLATION", "schema_violation", "Heal decision must be a JSON object");
   }
 
   const obj = data as Record<string, unknown>;
@@ -293,6 +341,7 @@ function validateHealDecision(data: unknown): HealDecisionV2 | ParserFailure {
   if (obj.contract_version !== "2.0") {
     return fail(
       "UNSUPPORTED_VERSION",
+      "schema_violation",
       `Expected contract_version "2.0", got "${String(obj.contract_version)}"`,
     );
   }
@@ -304,13 +353,14 @@ function validateHealDecision(data: unknown): HealDecisionV2 | ParserFailure {
     "root_cause",
   ] as const) {
     if (typeof obj[field] !== "string" || (obj[field] as string).length === 0) {
-      return fail("MISSING_REQUIRED_FIELD", `Missing or empty required field: ${field}`);
+      return fail("MISSING_REQUIRED_FIELD", "schema_violation", `Missing or empty required field: ${field}`);
     }
   }
 
   if (!VALID_HEAL_SCOPES.has(obj.scope as string)) {
     return fail(
       "SCHEMA_VIOLATION",
+      "schema_violation",
       `Invalid scope "${String(obj.scope)}". Must be one of: ${[...VALID_HEAL_SCOPES].join(", ")}`,
     );
   }
@@ -318,12 +368,13 @@ function validateHealDecision(data: unknown): HealDecisionV2 | ParserFailure {
   if (!VALID_HEAL_DECISIONS.has(obj.decision as string)) {
     return fail(
       "SCHEMA_VIOLATION",
+      "schema_violation",
       `Invalid decision "${String(obj.decision)}". Must be one of: ${[...VALID_HEAL_DECISIONS].join(", ")}`,
     );
   }
 
   if (!Array.isArray(obj.patches)) {
-    return fail("MISSING_REQUIRED_FIELD", "Missing required field: patches");
+    return fail("MISSING_REQUIRED_FIELD", "schema_violation", "Missing required field: patches");
   }
 
   return obj as unknown as HealDecisionV2;
@@ -370,8 +421,18 @@ export function generateFailureSignature(
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function fail(code: ParserErrorCode, message: string): ParserFailure {
-  return { ok: false, code, message };
+function fail(code: ParserErrorCode, kind: ParserFailureKind, message: string): ParserFailure {
+  return { ok: false, code, kind, message };
+}
+
+function failKind(
+  code: ParserErrorCode,
+  kind: ParserFailureKind,
+  message: string,
+  rawLength?: number,
+  sample?: string,
+): ParserFailure {
+  return { ok: false, code, kind, message, rawLength, sample };
 }
 
 /**
@@ -381,4 +442,26 @@ export function isParserFailure(
   result: TaskResultV2 | HealDecisionV2 | ParserFailure,
 ): result is ParserFailure {
   return "ok" in result && result.ok === false;
+}
+
+/**
+ * Map a ParserFailure to the appropriate `failure_class` for healer
+ * routing. Distinguishes "no output" (likely transient_infra) from
+ * "no sentinel" (prompt-shape contract_error). The orchestrator passes
+ * the result of this function to the healer so the healer chooses the
+ * right repair strategy.
+ */
+export function failureClassFromParserFailure(pf: ParserFailure): string {
+  switch (pf.kind) {
+    case "no_output":
+      return "transient_infra";
+    case "no_sentinel":
+      return "contract_error";
+    case "json_invalid":
+      return "output_format";
+    case "schema_violation":
+      return "weak_contract";
+    default:
+      return "weak_contract";
+  }
 }

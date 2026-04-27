@@ -16,6 +16,15 @@ export interface ManifestTaskV2 {
   priority?: number;
   retry_policy?: RetryPolicy;
   metadata?: Record<string, unknown>;
+  /**
+   * Optional mutual-exclusion key. Tasks sharing a `resource_lock` value
+   * serialize on an in-process mutex; unlike `depends_on`, a lock holder's
+   * FAILED/BLOCKED outcome does not strand other holders — they run in turn.
+   *
+   * Use `depends_on` when B consumes A's outputs. Use `resource_lock` when
+   * B and A merely share a mutable resource (workdir, file, external system).
+   */
+  resource_lock?: string | null;
 }
 
 export interface RetryPolicy {
@@ -141,4 +150,18 @@ export const HEALABLE_FAILURE_CLASSES: ReadonlySet<string> = new Set([
 export const NON_HEALABLE_FAILURE_CLASSES: ReadonlySet<string> = new Set([
   "blocked_external",
   "real_bug",
+]);
+
+/**
+ * Failure subtypes that represent static infrastructure conditions. Retrying
+ * against them provably produces no progress until an operator intervenes
+ * (rotate API key, restore tool, etc.). PBH short-circuits aborts the run
+ * when any task in the current window carries one of these.
+ *
+ * Subtypes are namespaced under the coarse `transient_infra` class via
+ * "transient_infra:<subtype>".
+ */
+export const FATAL_TRANSIENT_INFRA_SUBTYPES: ReadonlySet<string> = new Set([
+  "transient_infra:api_auth_blocked",
+  "transient_infra:tool_unavailable",
 ]);
