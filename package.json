@@ -1,6 +1,6 @@
 {
   "name": "agent-threader",
-  "version": "2.0.10",
+  "version": "2.0.11",
   "description": "AgentThreader -- skill + companion CLI for manifest-driven agentic CLI orchestration with structured contracts, resumable state, and bounded self-healing",
   "type": "module",
   "bin": {
