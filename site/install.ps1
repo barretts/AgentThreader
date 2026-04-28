@@ -1,3 +1,10 @@
+# install.ps1 -- Bootstrap installer for the published agent-threader package
+# Usage: irm https://agentthreader.com/install.ps1 | iex -- [--claude] [--cursor] [--windsurf] [--opencode] [--codex] [--all]
+#
+# Bootstrap process:
+#   1. Install the npm package globally
+#   2. Delegate to install.js (Node.js, cross-platform) for skill installation
+
 param(
   [switch]$Claude,
   [switch]$Cursor,
@@ -48,14 +55,14 @@ $npmRoot = (& npm root -g).Trim()
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $packageDir = Join-Path $npmRoot $ProjectName
-$localInstaller = Join-Path $packageDir 'install-local.ps1'
+$localInstaller = Join-Path $packageDir 'install.js'
 
 if (-not (Test-Path $localInstaller)) {
-  Write-Error "Could not find install-local.ps1 in $packageDir"
+  Write-Error "Could not find install.js in $packageDir"
 }
 
-Write-Host '--> Delegating to local installer...'
-& $localInstaller -SkillsOnly @installerArgs
+Write-Host '--> Delegating to Node.js installer...'
+& node $localInstaller --skills-only @installerArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ''

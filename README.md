@@ -40,8 +40,7 @@ agent-threader/
   site/                     # GitHub Pages site and hosted bootstrap installer
   install.sh                # Hosted bootstrap installer for curl-based setup
   install.ps1               # Hosted bootstrap installer for PowerShell setup
-  install-local.sh          # Full local installer for clone-based development
-  install-local.ps1         # Full local installer for PowerShell development setup
+  install.js                # Unified cross-platform local installer for clone-based development
 ```
 
 ## Core Design
@@ -80,7 +79,7 @@ npx --yes agent-threader@latest --help
 powershell -ExecutionPolicy Bypass -Command "& ([ScriptBlock]::Create((Invoke-RestMethod 'https://agentthreader.com/install.ps1'))) -All"
 ```
 
-The hosted bootstrap scripts install the published `agent-threader` package globally and then delegate to the packaged `install-local` script for your shell to copy the compiled skills into your selected tools.
+The hosted bootstrap scripts install the published `agent-threader` package globally and then delegate to the packaged `install.js` Node.js installer to copy the compiled skills into your selected tools.
 
 Use `npx` when you want one-off CLI usage without global install:
 
@@ -91,19 +90,19 @@ npx --yes agent-threader@latest validate-manifest ./manifest.json --json
 ### Local clone-based setup
 
 ```bash
-bash install-local.sh          # Auto-detect tools and install
+node install.js             # Auto-detect tools and install
 ```
 
 ```bash
-bash install-local.sh --all    # Install for all five tools
+node install.js --all       # Install for all five tools
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install-local.ps1
+node .\install.js           # Auto-detect tools and install
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install-local.ps1 -All
+node .\install.js --all     # Install for all five tools
 ```
 
 ## Development
@@ -114,7 +113,7 @@ npm run build            # Compile TypeScript CLI
 npm run compile          # Compile skills to all IDE targets
 npm run compile:validate # Validate manifest vs source includes
 npm run compile:watch    # Recompile on change
-bash install-local.sh    # Build, compile, link CLI, and install skills locally
+node install.js           # Build, compile, link CLI, and install skills locally
 ```
 
 ## CLI Commands

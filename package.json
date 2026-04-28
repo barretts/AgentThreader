@@ -20,10 +20,7 @@
     "skill",
     "site",
     "README.md",
-    "install.sh",
-    "install.ps1",
-    "install-local.sh",
-    "install-local.ps1"
+    "install.js"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -31,10 +28,10 @@
     "test:watch": "vitest",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "setup": "bash install-local.sh",
-    "setup:all": "bash install-local.sh --all",
-    "install-skills": "bash install-local.sh --skills-only",
-    "uninstall-skills": "bash install-local.sh --uninstall",
+    "setup": "node install.js",
+    "setup:all": "node install.js --all",
+    "install-skills": "node install.js --skills-only",
+    "uninstall-skills": "node install.js --uninstall",
     "compile": "node skill/build/compile.mjs",
     "compile:validate": "node skill/build/compile.mjs --validate",
     "compile:watch": "node skill/build/compile.mjs --watch"
@@ -46,11 +43,11 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
-    "typescript": "^5.3.0",
+    "cli-runner-learner": "^0.2.3",
     "eslint": "^9.0.0",
+    "typescript": "^5.3.0",
     "typescript-eslint": "^8.0.0",
-    "vitest": "^3.1.0",
-    "cli-runner-learner": "^0.2.3"
+    "vitest": "^3.1.0"
   },
   "peerDependencies": {
     "cli-runner-learner": "^0.2.3"

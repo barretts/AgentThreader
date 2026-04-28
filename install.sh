@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # install.sh -- Bootstrap installer for the published agent-threader package
 # Usage: bash <(curl -fsSL https://agentthreader.com/install.sh) [--claude] [--cursor] [--windsurf] [--opencode] [--codex] [--all]
+#
+# Bootstrap process:
+#   1. Install the npm package globally
+#   2. Delegate to install.js (Node.js, cross-platform) for skill installation
 
 set -euo pipefail
 
@@ -21,15 +25,15 @@ npm install -g "$PACKAGE_SPEC"
 
 NPM_ROOT="$(npm root -g)"
 PACKAGE_DIR="$NPM_ROOT/$PROJECT_NAME"
-LOCAL_INSTALLER="$PACKAGE_DIR/install-local.sh"
+LOCAL_INSTALLER="$PACKAGE_DIR/install.js"
 
 if [[ ! -f "$LOCAL_INSTALLER" ]]; then
-  echo "ERROR: Could not find install-local.sh in $PACKAGE_DIR"
+  echo "ERROR: Could not find install.js in $PACKAGE_DIR"
   exit 1
 fi
 
-echo "--> Delegating to local installer..."
-bash "$LOCAL_INSTALLER" --skills-only "${INSTALLER_ARGS[@]}"
+echo "--> Delegating to Node.js installer..."
+node "$LOCAL_INSTALLER" --skills-only "${INSTALLER_ARGS[@]}"
 
 echo ""
 echo "==> Done."

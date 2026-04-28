@@ -137,14 +137,13 @@
           <pre><code><span class="prompt">PS&gt;</span> &amp; ([ScriptBlock]::Create((Invoke-RestMethod 'https://agentthreader.com/install.ps1'))) -All
 <span class="dim">==&gt; Bootstrapping agent-threader@latest</span>
 <span class="dim">--&gt; Installing agent-threader@latest globally...</span>
-<span class="dim">--&gt; Delegating to local installer...</span>
+<span class="dim">--&gt; Delegating to Node.js installer...</span>
 <span class="success">==&gt; Done.</span>
-
-<span class="prompt">PS&gt;</span> powershell -ExecutionPolicy Bypass -File .\install-local.ps1 -All</code></pre>
+</code></pre>
         </div>
           </div>
         </div>
-        <p class="install-note">The hosted bootstrap script installs the published package, then delegates to the packaged <code>install-local.sh</code> to copy compiled skills into your detected tools.</p>
+        <p class="install-note">The hosted bootstrap script installs the published package, then delegates to the packaged <code>install.js</code> Node.js installer to copy compiled skills into your detected tools.</p>
         <p class="install-note">Release automation uses <code>AGENT_TOKEN</code> for release commit/tag push and <code>AGENT_NPM_TOKEN</code> for npm publish.</p>
         <div class="install-links">
           <a href="/install.sh" class="text-link">View install.sh</a>
