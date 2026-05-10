@@ -27,7 +27,7 @@ agent-threader/
     templates/              # TypeScript scaffolding (types, parser, orchestrator)
     build/
       manifest.json         # Skill registry and fragment declarations
-      compile.mjs           # Fragment-resolving compiler (7 IDE targets)
+      compile.mjs           # Fragment-resolving compiler for platform targets and variants
     fragments/
       common/               # Shared rules (workflow, model selection, portability)
       domain/               # Deep domain knowledge (architecture, healing, contracts)
@@ -35,7 +35,7 @@ agent-threader/
     skills/
       agent-threader/
         agent-threader.md   # Composed skill source with {{include:...}}
-  compiled/                 # Machine-generated IDE-specific outputs
+  compiled/                 # Machine-generated platform outputs and standalone variants
   platforms/                # Thin translation layers for Codex, Cursor, Claude, Windsurf
   site/                     # GitHub Pages site and hosted bootstrap installer
   install.sh                # Hosted bootstrap installer for curl-based setup
@@ -115,6 +115,8 @@ npm run compile:validate # Validate manifest vs source includes
 npm run compile:watch    # Recompile on change
 node install.js           # Build, compile, link CLI, and install skills locally
 ```
+
+`npm run compile` also writes `compiled/output/agent-threader/SKILL.md`, a standalone manual-agent skill variant for runs coordinated through prompts, files, logs, contracts, state, and verification evidence rather than the companion command-line workflow.
 
 ## CLI Commands
 

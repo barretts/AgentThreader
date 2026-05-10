@@ -39,6 +39,15 @@ function getSkillEntries(manifest) {
   return Object.entries(manifest.skills);
 }
 
+function getVariantEntries(skillConfig) {
+  const variants = skillConfig?.variants;
+  if (variants === undefined) return [];
+  if (!variants || typeof variants !== "object" || Array.isArray(variants)) {
+    return null;
+  }
+  return Object.entries(variants);
+}
+
 function extractIncludes(raw) {
   return [...new Set([...raw.matchAll(/\{\{include:([\w/.-]+)\}\}/g)].map(([, ref]) => ref))];
 }
@@ -58,7 +67,7 @@ function resolveIncludes(content, baseDir) {
   });
 }
 
-function compileSkill(skillName, sourceRelPath) {
+function compileSkill(skillName, sourceRelPath, managedMarker = MANAGED_MARKER) {
   const skillSrc = path.join(SKILL_DIR, sourceRelPath);
   if (!existsSync(skillSrc)) {
     console.error(`  ERROR: skill source not found: ${skillSrc}`);
@@ -66,10 +75,68 @@ function compileSkill(skillName, sourceRelPath) {
   }
   const raw = readFileSync(skillSrc, "utf8");
   const compiled = resolveIncludes(raw, path.dirname(skillSrc));
-  return `<!-- ${MANAGED_MARKER} -->\n${compiled}`;
+  return `<!-- ${managedMarker} -->\n${compiled}`;
 }
 
 // ─── Validation mode ─────────────────────────────────────────────────────────
+
+function validateSourceRefs(label, source, declaredFragments) {
+  let errors = 0;
+
+  if (typeof source !== "string" || source.length === 0) {
+    console.error(`  INVALID: ${label} must declare a non-empty source path`);
+    errors++;
+    return errors;
+  }
+
+  const skillSrc = path.join(SKILL_DIR, source);
+  if (!existsSync(skillSrc)) {
+    console.error(`  MISSING: ${label} source -> ${source}`);
+    errors++;
+    return errors;
+  }
+
+  const raw = readFileSync(skillSrc, "utf8");
+  const referenced = extractIncludes(raw);
+
+  for (const ref of referenced) {
+    const fragPath = path.join(FRAGMENTS_DIR, ref);
+    if (!existsSync(fragPath)) {
+      console.error(`  MISSING: ${label} include -> ${ref}`);
+      errors++;
+    }
+    if (!declaredFragments.includes(ref)) {
+      console.error(`  UNDECLARED: ${label} includes ${ref} but manifest does not declare it`);
+      errors++;
+    }
+  }
+
+  for (const ref of declaredFragments) {
+    const fragPath = path.join(FRAGMENTS_DIR, ref);
+    if (!existsSync(fragPath)) {
+      console.error(`  MISSING: ${label} declared fragment -> ${ref}`);
+      errors++;
+    }
+    if (!referenced.includes(ref)) {
+      console.error(`  UNUSED: ${label} declares ${ref} but source does not include it`);
+      errors++;
+    }
+  }
+
+  return errors;
+}
+
+function validateOutputPath(label, outputPath) {
+  if (typeof outputPath !== "string" || outputPath.length === 0) {
+    console.error(`  INVALID: ${label} must declare a non-empty output path`);
+    return 1;
+  }
+  if (path.isAbsolute(outputPath) || outputPath.split(/[\\/]+/).includes("..")) {
+    console.error(`  INVALID: ${label} output path must stay inside compiled/: ${outputPath}`);
+    return 1;
+  }
+  return 0;
+}
 
 function validateFragmentRefs() {
   let errors = 0;
@@ -83,47 +150,26 @@ function validateFragmentRefs() {
       continue;
     }
 
-    const source = skillConfig.source;
     const declaredFragments = Array.isArray(skillConfig.fragments) ? skillConfig.fragments : [];
+    errors += validateSourceRefs(skillName, skillConfig.source, declaredFragments);
 
-    if (typeof source !== "string" || source.length === 0) {
-      console.error(`  INVALID: ${skillName} must declare a non-empty source path`);
+    const variantEntries = getVariantEntries(skillConfig);
+    if (variantEntries === null) {
+      console.error(`  INVALID: ${skillName} variants must be an object`);
       errors++;
       continue;
     }
 
-    const skillSrc = path.join(SKILL_DIR, source);
-    if (!existsSync(skillSrc)) {
-      console.error(`  MISSING: ${skillName} source -> ${source}`);
-      errors++;
-      continue;
-    }
-
-    const raw = readFileSync(skillSrc, "utf8");
-    const referenced = extractIncludes(raw);
-
-    for (const ref of referenced) {
-      const fragPath = path.join(FRAGMENTS_DIR, ref);
-      if (!existsSync(fragPath)) {
-        console.error(`  MISSING: ${skillName} include -> ${ref}`);
+    for (const [variantName, variantConfig] of variantEntries) {
+      const label = `${skillName}:${variantName}`;
+      if (!variantConfig || typeof variantConfig !== "object" || Array.isArray(variantConfig)) {
+        console.error(`  INVALID: ${label} manifest entry must be an object`);
         errors++;
+        continue;
       }
-      if (!declaredFragments.includes(ref)) {
-        console.error(`  UNDECLARED: ${skillName} includes ${ref} but manifest does not declare it`);
-        errors++;
-      }
-    }
-
-    for (const ref of declaredFragments) {
-      const fragPath = path.join(FRAGMENTS_DIR, ref);
-      if (!existsSync(fragPath)) {
-        console.error(`  MISSING: ${skillName} declared fragment -> ${ref}`);
-        errors++;
-      }
-      if (!referenced.includes(ref)) {
-        console.error(`  UNUSED: ${skillName} declares ${ref} but source does not include it`);
-        errors++;
-      }
+      const variantFragments = Array.isArray(variantConfig.fragments) ? variantConfig.fragments : [];
+      errors += validateSourceRefs(label, variantConfig.source, variantFragments);
+      errors += validateOutputPath(label, variantConfig.path);
     }
   }
 
@@ -179,6 +225,15 @@ function emitCodex(skillName, compiledContent) {
   emit(path.join(COMPILED_DIR, "codex", skillName, "SKILL.md"), compiledContent);
 }
 
+function emitVariant(skillName, variantName, variantConfig, compiledContent) {
+  const outputPath = variantConfig?.path;
+  const label = `${skillName}:${variantName}`;
+  if (validateOutputPath(label, outputPath) > 0) {
+    process.exit(1);
+  }
+  emit(path.join(COMPILED_DIR, outputPath), compiledContent);
+}
+
 // ─── Main build ──────────────────────────────────────────────────────────────
 
 function build() {
@@ -200,6 +255,21 @@ function build() {
     emitWindsurf(skillName, compiled);
     emitOpencode(skillName, compiled);
     emitCodex(skillName, compiled);
+
+    const variantEntries = getVariantEntries(skillConfig);
+    if (variantEntries === null) {
+      console.error(`  ERROR: ${skillName} variants must be an object`);
+      process.exit(1);
+    }
+    for (const [variantName, variantConfig] of variantEntries) {
+      const variantSource = variantConfig?.source;
+      if (typeof variantSource !== "string" || variantSource.length === 0) {
+        console.error(`  ERROR: ${skillName}:${variantName} must declare a non-empty source path in manifest`);
+        process.exit(1);
+      }
+      const variantCompiled = compileSkill(skillName, variantSource, `${MANAGED_MARKER}-${variantName}`);
+      emitVariant(skillName, variantName, variantConfig, variantCompiled);
+    }
   }
 
   console.log("==> Done.");

@@ -16,7 +16,27 @@
         "common/model-selection.md",
         "common/portability-rules.md",
         "common/workflow.md"
-      ]
+      ],
+      "variants": {
+        "output": {
+          "source": "skills/agent-threader-output/agent-threader-output.md",
+          "path": "output/agent-threader/SKILL.md",
+          "fragments": [
+            "manual/architecture-overview.md",
+            "domain/contracts.md",
+            "domain/pbh-healing.md",
+            "domain/verification-safety.md",
+            "manual/execution-model.md",
+            "manual/state-resume.md",
+            "manual/run-identity.md",
+            "meta/schemas-reference.md",
+            "meta/templates-reference.md",
+            "manual/model-selection.md",
+            "manual/portability-rules.md",
+            "manual/workflow.md"
+          ]
+        }
+      }
     }
   }
 }
