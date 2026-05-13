@@ -36,6 +36,7 @@ const MANAGED_MARKER = "managed_by: agent-threader";
 const MANAGED_MARKER_RE = new RegExp(MANAGED_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
 const SKILLS = ["agent-threader"];
 const COMPILED_DIR = join(ROOT, "compiled");
+const COMPILE_SCRIPT = join(ROOT, "skill", "build", "compile.mjs");
 
 // ─── Directory paths ─────────────────────────────────────────────────────────
 
@@ -87,6 +88,20 @@ function run(cmd, args, opts = {}) {
 
 function npmPrefixGlobal() {
   return execSync("npm prefix -g", { encoding: "utf8" }).trim();
+}
+
+function hasSourceBuild() {
+  return existsSync(join(ROOT, "src")) && existsSync(COMPILE_SCRIPT);
+}
+
+function hasCompiledArtifacts() {
+  return existsSync(join(COMPILED_DIR, "claude", "agent-threader", "SKILL.md")) &&
+    existsSync(join(COMPILED_DIR, "cursor", "rules", "agent-threader.mdc")) &&
+    existsSync(join(COMPILED_DIR, "cursor", "skills", "agent-threader", "SKILL.md")) &&
+    existsSync(join(COMPILED_DIR, "windsurf", "rules", "agent-threader.md")) &&
+    existsSync(join(COMPILED_DIR, "windsurf", "skills", "agent-threader", "SKILL.md")) &&
+    existsSync(join(COMPILED_DIR, "opencode", "agent-threader.md")) &&
+    existsSync(join(COMPILED_DIR, "codex", "agent-threader", "SKILL.md"));
 }
 
 // ─── Auto-detection ───────────────────────────────────────────────────────────
@@ -262,8 +277,16 @@ function main() {
   }
 
   if (doCompileOnly) {
+    if (!hasSourceBuild()) {
+      if (hasCompiledArtifacts()) {
+        log("==> Compiled release artifacts already present.");
+        log("Use the dev branch to rebuild generated skill artifacts.");
+        return;
+      }
+      error("No source compiler or compiled release artifacts found.");
+    }
     log("==> Compiling skills...");
-    run("node", ["skill/build/compile.mjs"]);
+    run("node", [COMPILE_SCRIPT]);
     log("==> Done.");
     return;
   }
@@ -320,6 +343,17 @@ function main() {
   info(`Targets: ${targets.join(", ")}`);
   log("");
 
+  if (doBuild && !hasSourceBuild()) {
+    if (!hasCompiledArtifacts()) {
+      error("No source build files or compiled release artifacts found.");
+    }
+    log("--> Static release artifacts found; skipping source build and npm link.");
+    log("    Use the dev branch to rebuild generated skill artifacts.");
+    doBuild = false;
+  }
+
+  let cliInstalled = false;
+
   if (doBuild) {
     // Verify Node.js and npm are available
     try {
@@ -350,6 +384,7 @@ function main() {
       existsSync(join(npmBin, `${CLI_BIN_NAME}.ps1`));
 
     if (binExists) {
+      cliInstalled = true;
       info(`${CLI_BIN_NAME}: ${join(npmBin, CLI_BIN_NAME)}`);
       try {
         const version = execSync(`${join(npmBin, CLI_BIN_NAME)} --version`, { encoding: "utf8" }).trim();
@@ -392,7 +427,11 @@ function main() {
   log("==> Done.");
   log("");
   log(`Skills installed for: ${targets.join(", ")}`);
-  log(`CLI available as: ${CLI_BIN_NAME}`);
+  if (cliInstalled) {
+    log(`CLI available as: ${CLI_BIN_NAME}`);
+  } else {
+    log(`CLI available through the published npm package: npx --yes ${PROJECT_NAME}@latest --help`);
+  }
 }
 
 function printHelp() {
@@ -406,7 +445,7 @@ Options:
   --all           Install for all five tools
   --skills-only   Skip npm install/build/link (just copy skills)
   --uninstall     Remove installed skills from target tools
-  --compile-only  Generate compiled/ output directory (no install)
+  --compile-only  Generate compiled/ output directory on dev; validate artifacts on static main
   --help, -h      Show this help
 
 No flags = auto-detect installed tools.

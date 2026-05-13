@@ -1,4 +1,0 @@
-interface:
-  display_name: "AgentThreader"
-  short_description: "Build self-healing CLI runners with JSON contracts and PBH healing"
-  default_prompt: "Use $agent-threader to design a resumable worker-plus-healer runner around `agent` or `opencode`. Read SKILL.md for workflow and SPEC.md for the normative v2 architecture. Ask me which worker and healer models to use."
