@@ -366,7 +366,7 @@ Until that work is done, these contributions are **suggestions backed by archiva
 
 ## Appendix B: lesson bundle index
 
-Nine lessons ship as a PR against the agent-threader source repo at [/Users/ephem/lcode/agentthreader/lessons/](/Users/ephem/lcode/agentthreader/lessons/):
+Nine lessons shipped as a draft PR against the agent-threader source repo: [barretts/AgentThreader#9](https://github.com/barretts/AgentThreader/pull/9). Local source at [/Users/ephem/lcode/agentthreader/lessons/](/Users/ephem/lcode/agentthreader/lessons/) (branch `lessons-dashboard-a11y-corpus-2026-05-12`):
 
 | Lesson | Severity | n | Confidence |
 | --- | --- | ---: | --- |
