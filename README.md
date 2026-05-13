@@ -136,10 +136,7 @@ All commands support `--json` for machine-readable output.
 
 ## Release Automation
 
-The release workflow in `.github/workflows/release.yml` expects:
-
-- `AGENT_TOKEN` - GitHub token with permission to push release commits and tags
-- `AGENT_NPM_TOKEN` - npm automation token used as `NODE_AUTH_TOKEN` for publish
+Npm deployment automation is disabled for now. The previous release workflow is retained at `.github/disabled-workflows/release.yml` for a future explicit re-enable plan.
 
 ## Ecosystem
 

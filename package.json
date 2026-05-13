@@ -24,8 +24,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run test/lib",
+    "test:watch": "vitest test/lib",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "setup": "node install.js",
